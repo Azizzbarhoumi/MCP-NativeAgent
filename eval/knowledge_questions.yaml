@@ -1,0 +1,377 @@
+# Questions reviewed by Claude at the owner's request (quotes machine-verified). Set reviewed: false to exclude one.
+- id: lo01
+  type: lookup
+  question: What is the default timeout for a GitHub Actions job if timeout-minutes is not set?
+  expected_answer: 360 minutes.
+  source_docs:
+  - path: github_actions_docs/content/actions/reference/workflows-and-actions/workflow-syntax.md
+    section: About YAML syntax for workflows > `jobs.<job_id>.timeout-minutes`
+  evidence_quote: 'The maximum number of minutes to let a job run before GitHub automatically cancels it. Default:
+    360'
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: lo02
+  type: lookup
+  question: How many jobs can a matrix generate at most per workflow run?
+  expected_answer: 256 jobs per workflow run (GitHub-hosted and self-hosted).
+  source_docs:
+  - path: github_actions_docs/content/actions/reference/workflows-and-actions/workflow-syntax.md
+    section: About YAML syntax for workflows > `jobs.<job_id>.strategy.matrix`
+  evidence_quote: A matrix will generate a maximum of 256 jobs per workflow run.
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: lo03
+  type: lookup
+  question: After how many days without access does GitHub evict a cache entry, and what is the default cache size
+    limit per repository?
+  expected_answer: Entries not accessed in over 7 days are removed; the default limit is 10 GB per repository.
+  source_docs:
+  - path: github_actions_docs/content/actions/reference/workflows-and-actions/dependency-caching.md
+    section: '`cache` action usage > Usage limits and eviction policy > Default limits'
+  - path: github_actions_docs/content/actions/reference/workflows-and-actions/dependency-caching.md
+    section: '`cache` action usage > Usage limits and eviction policy > Default limits'
+  evidence_quote:
+  - GitHub will remove any cache entries that have not been accessed in over 7 days.
+  - By default, the limit is 10 GB per repository
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: lo04
+  type: lookup
+  question: What is the default pytest fixture scope and when is such a fixture destroyed?
+  expected_answer: function scope; the fixture is destroyed at the end of the test.
+  source_docs:
+  - path: pytest_docs/doc/en/how-to/fixtures.rst
+    section: 'How to use fixtures > Scope: sharing fixtures across classes, modules, packages or session > Fixture
+      scopes'
+  evidence_quote: '`function`: the default scope, the fixture is destroyed at the end of the test.'
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: lo05
+  type: lookup
+  question: Where should a pytest fixture be placed so tests in multiple test modules of a directory can use it?
+  expected_answer: In a conftest.py file in that directory.
+  source_docs:
+  - path: pytest_docs/doc/en/how-to/fixtures.rst
+    section: 'How to use fixtures > Scope: sharing fixtures across classes, modules, packages or session'
+  evidence_quote: The next example puts the fixture function into a separate `conftest.py` file
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: lo06
+  type: lookup
+  question: What does setting strict=True on pytest.mark.xfail change?
+  expected_answer: XPASS (unexpectedly passing) results from that test make the test suite fail.
+  source_docs:
+  - path: pytest_docs/doc/en/how-to/skipping.rst
+    section: 'How to use skip and xfail to deal with tests that cannot succeed > XFail: mark test functions as expected
+      to fail > `strict` parameter'
+  evidence_quote: This will make `XPASS` ("unexpectedly passing") results from this test to fail the test suite.
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: lo07
+  type: lookup
+  question: What is the default delay before a Celery task is retried?
+  expected_answer: 3 minutes (Task.default_retry_delay); it can be overridden with countdown.
+  source_docs:
+  - path: celery_docs/docs/userguide/tasks.rst
+    section: Retrying > Using a custom retry delay
+  - path: celery_docs/docs/userguide/tasks.rst
+    section: Retrying > Using a custom retry delay
+  evidence_quote:
+  - attribute. By default this is set to 3 minutes.
+  - You can also provide the `countdown` argument to
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: lo08
+  type: lookup
+  question: What is the default value of Celery's Task.max_retries and what does None mean?
+  expected_answer: 3 by default; None means the task will retry forever.
+  source_docs:
+  - path: celery_docs/docs/userguide/tasks.rst
+    section: Retrying > Automatic retry for known exceptions
+  evidence_quote: A value of `None` means task will retry forever. By default, this option is set to `3`.
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: lo09
+  type: lookup
+  question: What do you need to install before using FastAPI's TestClient?
+  expected_answer: httpx.
+  source_docs:
+  - path: fastapi_docs/docs/en/docs/tutorial/testing.md
+    section: Testing > Using `TestClient`
+  evidence_quote: To use `TestClient`, first install [`httpx`]
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: lo10
+  type: lookup
+  question: How do you replace a dependency with a fake one when testing a FastAPI app?
+  expected_answer: 'Use app.dependency_overrides: a dict with the original dependency as key and the override function
+    as value.'
+  source_docs:
+  - path: fastapi_docs/docs/en/docs/advanced/testing-dependencies.md
+    section: Testing Dependencies with Overrides > Overriding dependencies during testing > Use the `app.dependency_overrides`
+      attribute
+  evidence_quote: To override a dependency for testing, you put as a key the original dependency (a function), and
+    as the value, your dependency override (another function).
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: lo11
+  type: lookup
+  question: How do you make a Docker build skip unnecessary files in the build context?
+  expected_answer: Create a .dockerignore file in the root of the build context.
+  source_docs:
+  - path: docker_docs/content/manuals/build/cache/optimize.md
+    section: Order your layers > Keep the context small
+  evidence_quote: to create a `.dockerignore` file in the root of your build context.
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: lo12
+  type: lookup
+  question: Can the retention-days of an uploaded artifact exceed the repository's retention limit?
+  expected_answer: No, retention-days cannot exceed the limit set by the repository, organization, or enterprise.
+  source_docs:
+  - path: github_actions_docs/content/actions/tutorials/store-and-share-data.md
+    section: Prerequisites > Configuring a custom artifact retention period
+  evidence_quote: The `retention-days` value cannot exceed the retention limit set by the repository, organization,
+    or enterprise.
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: ex01
+  type: exact_match
+  question: What does pytest exit code 4 mean?
+  expected_answer: pytest command line usage error, including a plugin that cannot be found or a conftest.py that
+    fails to import.
+  source_docs:
+  - path: pytest_docs/doc/en/reference/exit-codes.rst
+    section: Exit codes
+  evidence_quote: 'Exit code 4: pytest command line usage error, including a plugin that cannot be found or a `conftest.py`
+    that fails to import'
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: ex02
+  type: exact_match
+  question: Which secret or variable must be set to true to enable step debug logging in GitHub Actions?
+  expected_answer: ACTIONS_STEP_DEBUG set to true.
+  source_docs:
+  - path: github_actions_docs/content/actions/how-tos/monitor-workflows/enable-debug-logging.md
+    section: Enabling runner diagnostic logging > Enabling step debug logging
+  evidence_quote: 'To enable step debug logging, set the following secret or variable in the repository that contains
+    the workflow: `ACTIONS_STEP_DEBUG` to `true`.'
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: ex03
+  type: exact_match
+  question: Which secret or variable enables runner diagnostic logging in GitHub Actions?
+  expected_answer: ACTIONS_RUNNER_DEBUG set to true.
+  source_docs:
+  - path: github_actions_docs/content/actions/how-tos/monitor-workflows/enable-debug-logging.md
+    section: Enabling runner diagnostic logging
+  evidence_quote: 'To enable runner diagnostic logging, set the following secret or variable in the repository that
+    contains the workflow: `ACTIONS_RUNNER_DEBUG` to `true`.'
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: ex04
+  type: exact_match
+  question: What exit code does `ruff check` return when violations were found?
+  expected_answer: '1.'
+  source_docs:
+  - path: ruff_docs/docs/linter.md
+    section: The Ruff Linter > Exit codes
+  evidence_quote: '- `1` if violations were found.'
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: ex05
+  type: exact_match
+  question: What exit code does `ruff format --check` return if one or more files would be reformatted?
+  expected_answer: '1.'
+  source_docs:
+  - path: ruff_docs/docs/formatter.md
+    section: The Ruff Formatter > Exit codes
+  evidence_quote: '- `1` if Ruff terminates successfully, and one or more files would be formatted if `--check`
+    were'
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: ex06
+  type: exact_match
+  question: Which flag makes Ruff apply unsafe fixes too?
+  expected_answer: --unsafe-fixes together with --fix (or the unsafe-fixes setting).
+  source_docs:
+  - path: ruff_docs/docs/linter.md
+    section: The Ruff Linter > Fixes > Fix safety
+  evidence_quote: pass the `--unsafe-fixes` flag alongside `--fix`
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: ex07
+  type: exact_match
+  question: How do you suppress Ruff rule F841 on a single line?
+  expected_answer: 'Add `# noqa: F841` at the end of the line.'
+  source_docs:
+  - path: ruff_docs/docs/linter.md
+    section: The Ruff Linter > Error suppression > Comments > Line-level
+  evidence_quote: 'x = 1  # noqa: F841'
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: ex08
+  type: exact_match
+  question: Which pytest command stops the run after two failures?
+  expected_answer: pytest --maxfail=2
+  source_docs:
+  - path: pytest_docs/doc/en/how-to/failures.rst
+    section: How to handle test failures > Stopping after the first (or N) failures
+  evidence_quote: 'pytest --maxfail=2  # stop after two failures'
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: ex09
+  type: exact_match
+  question: Which pytest command lists the 10 slowest tests longer than 1 second?
+  expected_answer: pytest --durations=10 --durations-min=1.0
+  source_docs:
+  - path: pytest_docs/doc/en/how-to/usage.rst
+    section: How to invoke pytest > Profiling test execution duration
+  evidence_quote: pytest --durations=10 --durations-min=1.0
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: ex10
+  type: exact_match
+  question: Which exception does a Celery task catch to clean up before its hard time limit?
+  expected_answer: celery.exceptions.SoftTimeLimitExceeded
+  source_docs:
+  - path: celery_docs/docs/userguide/workers.rst
+    section: Time Limits
+  evidence_quote: from celery.exceptions import SoftTimeLimitExceeded
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: ex11
+  type: exact_match
+  question: What Dockerfile RUN line caches pip downloads between builds?
+  expected_answer: RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt
+  source_docs:
+  - path: docker_docs/content/manuals/build/cache/optimize.md
+    section: Order your layers > Use cache mounts
+  evidence_quote: RUN --mount=type=cache,target=/root/.cache/pip
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: mu01
+  type: multi_hop
+  question: A CI job runs pytest but finds no test files. What exit code does pytest return, and which workflow
+    step setting lets the job still pass when that step fails?
+  expected_answer: 'Exit code 5 (no tests were collected); set continue-on-error: true on the step.'
+  source_docs:
+  - path: pytest_docs/doc/en/reference/exit-codes.rst
+    section: Exit codes
+  - path: github_actions_docs/content/actions/reference/workflows-and-actions/workflow-syntax.md
+    section: About YAML syntax for workflows > `jobs.<job_id>.steps[*].continue-on-error`
+  evidence_quote:
+  - 'Exit code 5: No tests were collected'
+  - Prevents a job from failing when a step fails. Set to `true` to allow a job to pass when this step fails.
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: mu02
+  type: multi_hop
+  question: A pytest suite in GitHub Actions runs for 7 hours on a GitHub-hosted runner. What happens, and what
+    is the default job timeout?
+  expected_answer: GitHub-hosted jobs are limited to 6 hours of execution time, so the job is terminated and fails;
+    the default timeout-minutes is 360.
+  source_docs:
+  - path: github_actions_docs/content/actions/reference/limits.md
+    section: Existing system limits
+  - path: github_actions_docs/content/actions/reference/workflows-and-actions/workflow-syntax.md
+    section: About YAML syntax for workflows > `jobs.<job_id>.timeout-minutes`
+  evidence_quote:
+  - Each job in a workflow can run for up to 6 hours of execution time. If a job reaches this limit, the job is
+    terminated and fails.
+  - 'The maximum number of minutes to let a job run before GitHub automatically cancels it. Default: 360'
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: mu03
+  type: multi_hop
+  question: In a CI lint step, `ruff check` fails the job. What exit code caused it, and how do you make that step
+    non-blocking in GitHub Actions without changing Ruff's exit code?
+  expected_answer: 'ruff check exits 1 when violations are found; set continue-on-error: true on the step.'
+  source_docs:
+  - path: ruff_docs/docs/linter.md
+    section: The Ruff Linter > Exit codes
+  - path: github_actions_docs/content/actions/reference/workflows-and-actions/workflow-syntax.md
+    section: About YAML syntax for workflows > `jobs.<job_id>.steps[*].continue-on-error`
+  evidence_quote:
+  - '- `1` if violations were found.'
+  - Prevents a job from failing when a step fails. Set to `true` to allow a job to pass when this step fails.
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: mu04
+  type: multi_hop
+  question: FastAPI docs suggest a bigger tool for heavy background work. Which tool, and what Celery settings make
+    a task acknowledged only after it runs with prefetching of one task?
+  expected_answer: Celery; task_acks_late = True and worker_prefetch_multiplier = 1.
+  source_docs:
+  - path: fastapi_docs/docs/en/docs/tutorial/background-tasks.md
+    section: Background Tasks > Caveat
+  - path: celery_docs/docs/userguide/optimizing.rst
+    section: Worker Settings > Reserve one task at a time
+  evidence_quote:
+  - you might benefit from using other bigger tools like [Celery]
+  - task_acks_late = True
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: mu05
+  type: multi_hop
+  question: To speed up a Python CI pipeline, how do you cache pip in the Dockerfile build, and after how long does
+    GitHub evict unused Actions cache entries?
+  expected_answer: Use RUN --mount=type=cache,target=/root/.cache/pip in the Dockerfile; GitHub removes cache entries
+    not accessed in over 7 days.
+  source_docs:
+  - path: docker_docs/content/manuals/build/cache/optimize.md
+    section: Order your layers > Use cache mounts
+  - path: github_actions_docs/content/actions/reference/workflows-and-actions/dependency-caching.md
+    section: '`cache` action usage > Usage limits and eviction policy > Default limits'
+  evidence_quote:
+  - RUN --mount=type=cache,target=/root/.cache/pip
+  - GitHub will remove any cache entries that have not been accessed in over 7 days.
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: mu06
+  type: multi_hop
+  question: A CI run fails because conftest.py cannot be imported. What pytest exit code does that produce, and
+    which command-line flag controls how pytest imports test modules and conftest files?
+  expected_answer: Exit code 4; the --import-mode flag (default prepend).
+  source_docs:
+  - path: pytest_docs/doc/en/reference/exit-codes.rst
+    section: Exit codes
+  - path: pytest_docs/doc/en/explanation/pythonpath.rst
+    section: pytest import mechanisms and `sys.path`/`PYTHONPATH` > Import modes
+  evidence_quote:
+  - 'Exit code 4: pytest command line usage error, including a plugin that cannot be found or a `conftest.py` that
+    fails to import'
+  - import process can be controlled through the --import-mode command-line flag
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: mu07
+  type: multi_hop
+  question: A Celery task fails on a flaky service in CI. Which argument to self.retry() makes it wait 60 seconds
+    before retrying, and how many retries does a task get by default?
+  expected_answer: countdown=60, e.g. raise self.retry(exc=exc, countdown=60); the default max_retries is 3.
+  source_docs:
+  - path: celery_docs/docs/userguide/tasks.rst
+    section: Retrying > Using a custom retry delay
+  - path: celery_docs/docs/userguide/tasks.rst
+    section: Retrying > Automatic retry for known exceptions
+  evidence_quote:
+  - raise self.retry(exc=exc, countdown=60)
+  - A value of `None` means task will retry forever. By default, this option is set to `3`.
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)
+- id: mu08
+  type: multi_hop
+  question: Your FastAPI tests fail with an import error for httpx in CI. What must be installed, and which GitHub
+    Actions debug variable gives more detailed step logs to confirm it?
+  expected_answer: Install httpx (needed by TestClient); set ACTIONS_STEP_DEBUG to true.
+  source_docs:
+  - path: fastapi_docs/docs/en/docs/tutorial/testing.md
+    section: Testing > Using `TestClient`
+  - path: github_actions_docs/content/actions/how-tos/monitor-workflows/enable-debug-logging.md
+    section: Enabling runner diagnostic logging > Enabling step debug logging
+  evidence_quote:
+  - To use `TestClient`, first install [`httpx`]
+  - 'To enable step debug logging, set the following secret or variable in the repository that contains the workflow:
+    `ACTIONS_STEP_DEBUG` to `true`.'
+  reviewed: true
+  reviewed_by: claude (quote-checked; not yet human-verified)

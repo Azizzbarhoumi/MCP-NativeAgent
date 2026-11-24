@@ -1,0 +1,6 @@
+{
+  "name": "knowledge-agent",
+  "description": "Agentic RAG + GraphRAG via the custom knowledge MCP server.",
+  "skills": [],
+  "endpoint": "TODO"
+}

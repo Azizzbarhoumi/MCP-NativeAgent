@@ -1,0 +1,14 @@
+.env
+.venv/
+__pycache__/
+*.egg-info/
+mcp_servers/config/github.env
+knowledge/corpus/
+
+# generated graph viewer (embeds third-party doc excerpts)
+knowledge/graph/viewer/knowledge_graph.html
+
+eval/git_scenarios/build/
+logs/
+
+.pytest_cache/

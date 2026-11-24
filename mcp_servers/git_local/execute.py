@@ -1,0 +1,417 @@
+"""Typed git operations that change a repo, behind per-step approval.
+
+Flow for every step:
+  1. prepare(repo, op, params)  validates the arguments, rates the step, says what a dangerous
+     step would lose, and returns an approval token bound to (repo, op, exact params, HEAD).
+  2. The user approves that one step. Dangerous steps also need the confirmation phrase.
+  3. execute(token, repo, op, params, confirmation)  re-checks the binding (a changed command,
+     a reused token or a moved HEAD is refused), backs up before dangerous steps, runs git,
+     then reports the new state in plain words and how to undo.
+
+Tiers: safe = the read-only tools (no click), recoverable = needs approval, dangerous =
+approval + confirmation phrase + automatic backup, blocked = never runs.
+There is no raw-command tool: the model can only pick an op and fill typed parameters.
+"""
+
+import hashlib
+import hmac
+import json
+import re
+import secrets
+import shutil
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+from mcp_servers.git_local import inspect_repo as ir
+from mcp_servers.git_local import safe_git
+from mcp_servers.git_local.safe_git import GitToolError
+
+LOG = Path(__file__).resolve().parents[2] / "logs" / "git_exec.jsonl"
+TOKEN_TTL_S = 600
+_SECRET = secrets.token_bytes(32)      # per process: tokens die with the server
+_PENDING: dict[str, dict] = {}
+
+CREDENTIAL = re.compile(r"(gh[pousr]_\w{16,}|github_pat_\w{16,}|glpat-\w{16,}|AKIA[0-9A-Z]{16}|"
+                        r"://[^/\s:@]+:[^/\s@]+@|-----BEGIN [A-Z ]*PRIVATE KEY)")
+SECRET_FILE = re.compile(r"(^|/)(\.env(\..*)?|\.git-credentials|\.netrc|id_(rsa|ed25519|ecdsa)|.*\.pem|.*\.key)$")
+BLOCKED_OPS = {"config", "remote_set_url", "remote_add", "credential", "delete_repo",
+               "filter_branch", "filter_repo", "gc_prune", "update_ref", "raw"}
+
+
+# ------------------------------------------------------------ argument validation
+
+def _ref(repo: Path, name: str) -> str:
+    if not isinstance(name, str) or not re.fullmatch(r"(?!-)(?!.*\.\.)(?!.*//)[A-Za-z0-9._/-]{1,100}", name) \
+            or name.endswith((".lock", "/", ".")):
+        raise GitToolError(f"invalid branch name: {name!r}")
+    safe_git.run(repo, ["check-ref-format", "--branch", name], read_only=True)
+    return name
+
+
+def _rev(repo: Path, rev: str) -> str:
+    """Resolved to a full commit id, so the value passed to git can never look like an option."""
+    if not isinstance(rev, str) or not re.fullmatch(r"(?!-)[A-Za-z0-9._/~^@{}-]{1,80}", rev):
+        raise GitToolError(f"invalid revision: {rev!r}")
+    p = safe_git.run(repo, ["rev-parse", "--verify", "--quiet", "--end-of-options", rev + "^{commit}"],
+                     read_only=True, ok_codes=(0, 1))
+    if not p.stdout.strip():
+        raise GitToolError(f"unknown revision: {rev}")
+    return p.stdout.strip()
+
+
+def _remote(repo: Path, name: str) -> str:
+    if not isinstance(name, str) or not re.fullmatch(r"(?!-)[A-Za-z0-9._-]{1,50}", name):
+        raise GitToolError(f"invalid remote name: {name!r}")
+    remotes = safe_git.run(repo, ["remote"], read_only=True).stdout.split()
+    if name not in remotes:
+        raise GitToolError(f"no remote named {name}")
+    url = safe_git.run(repo, ["remote", "get-url", "--push", name], read_only=True).stdout.strip()
+    if CREDENTIAL.search(url):
+        raise GitToolError("blocked: this remote URL contains a credential. Remove it from the URL "
+                           "and use a credential manager or SSH key instead (explained, not fixed).")
+    return name
+
+
+def _message(msg: str) -> str:
+    if not isinstance(msg, str) or not msg.strip() or len(msg) > 500 or msg.startswith("-") or "\0" in msg:
+        raise GitToolError("invalid commit message (1-500 chars, must not start with '-')")
+    return msg
+
+
+def _paths(repo: Path, paths) -> list[str]:
+    if isinstance(paths, str):
+        paths = [paths]
+    if not paths or len(paths) > 50:
+        raise GitToolError("give 1 to 50 paths")
+    return [safe_git.check_file_arg(repo, p) if p != "." else "." for p in paths]
+
+
+def _no_credentials(params: dict) -> None:
+    if CREDENTIAL.search(json.dumps(params)):
+        raise GitToolError("blocked: an argument looks like a password or token. Never pass credentials.")
+
+
+# ------------------------------------------------------------ repo facts
+
+def _git(repo, *args, ok=(0,)):
+    return safe_git.run(repo, list(args), read_only=True, ok_codes=ok).stdout
+
+
+def _head(repo: Path) -> str:
+    return _git(repo, "rev-parse", "--verify", "--quiet", "HEAD", ok=(0, 1)).strip() or "unborn"
+
+
+def _current_branch(repo: Path) -> str | None:
+    out = _git(repo, "symbolic-ref", "--quiet", "--short", "HEAD", ok=(0, 1)).strip()
+    return out or None
+
+
+def _is_pushed(repo: Path, rev: str = "HEAD") -> bool:
+    return bool(_git(repo, "branch", "-r", "--contains", rev, ok=(0, 129)).strip())
+
+
+def _oneline(repo: Path, *range_args: str) -> list[str]:
+    return [l for l in _git(repo, "log", "--oneline", "--no-decorate", "-n50", *range_args, ok=(0, 128)).splitlines() if l]
+
+
+# ------------------------------------------------------------ operations
+
+class Op:
+    def __init__(self, tier, explain, build, lose=None, backup=None, undo=None):
+        self.tier, self.explain, self.build = tier, explain, build
+        self.lose, self.backup, self.undo = lose, backup, undo
+
+
+def _tier_switch(repo, p):
+    if _current_branch(repo) is None and _oneline(repo, "HEAD", "--not", "--branches", "--tags", "--remotes"):
+        return "dangerous"  # leaving a detached HEAD that has commits on no branch
+    return "recoverable"
+
+
+OPS: dict[str, Op] = {
+    "switch": Op(_tier_switch, "Move to another branch.",
+                 lambda r, p: ["switch", "--end-of-options", _ref(r, p["branch"])],
+                 lose=lambda r, p: _oneline(r, "HEAD", "--not", "--branches", "--tags", "--remotes"),
+                 backup="head", undo=lambda r, p, before: f"git switch {before['branch'] or '--detach ' + before['head'][:12]}"),
+    "create_branch": Op("recoverable", "Create a branch at a commit (default: where you are). Nothing moves.",
+                        lambda r, p: ["branch", "--end-of-options", _ref(r, p["name"]),
+                                      *([_rev(r, p["start"])] if p.get("start") else [])],
+                        undo=lambda r, p, b: f"git branch -d {p['name']}"),
+    "switch_create": Op("recoverable", "Create a branch where you are and move onto it. Saves detached commits.",
+                        lambda r, p: ["switch", "-c", _ref(r, p["name"])],
+                        undo=lambda r, p, b: f"git switch {b['branch'] or '--detach ' + b['head'][:12]}  then  git branch -d {p['name']}"),
+    "add": Op("recoverable", "Stage files for the next commit.",
+              lambda r, p: ["add", "--", *_paths(r, p["paths"])],
+              undo=lambda r, p, b: "git restore --staged -- " + " ".join(p["paths"] if isinstance(p["paths"], list) else [p["paths"]])),
+    "rm_cached": Op("recoverable", "Stop tracking files. They stay on your disk.",
+                    lambda r, p: ["rm", "--cached", "-r", "--", *_paths(r, p["paths"])],
+                    undo=lambda r, p, b: "git add -- " + " ".join(p["paths"] if isinstance(p["paths"], list) else [p["paths"]])),
+    "restore_staged": Op("recoverable", "Unstage files. Your edits stay.",
+                         lambda r, p: ["restore", "--staged", "--", *_paths(r, p["paths"])],
+                         undo=lambda r, p, b: "git add -- (same files)"),
+    "gitignore_add": Op("recoverable", "Add a pattern to .gitignore so git stops offering that file.",
+                        None, undo=lambda r, p, b: f"remove the line {p['pattern']!r} from .gitignore"),
+    "resolve_conflict": Op("recoverable", "Settle a conflicted file by keeping one side ('ours' = your branch, "
+                           "'theirs' = the branch being merged). Stage it with add afterwards.",
+                           lambda r, p: ["checkout", "--" + {"ours": "ours", "theirs": "theirs"}[p["side"]], "--",
+                                         *_paths(r, p["path"])],
+                           undo=lambda r, p, b: f"git checkout -m -- {p['path']}  (brings the conflict markers back)"),
+    "commit": Op("recoverable", "Record the staged changes as a commit.",
+                 lambda r, p: ["commit", "--no-verify", "-m", _message(p["message"])],
+                 undo=lambda r, p, b: f"git reset --soft {b['head'][:12]}  (keeps the changes staged)"),
+    "merge_commit": Op("recoverable", "Finish a merge after all conflicts are resolved.",
+                       lambda r, p: ["commit", "--no-verify", "--no-edit"],
+                       undo=lambda r, p, b: f"git reset --merge {b['head'][:12]}"),
+    "merge": Op("recoverable", "Bring another branch's commits into this one.",
+                lambda r, p: ["merge", "--no-edit", "--no-verify", "--end-of-options", _ref(r, p["branch"])],
+                undo=lambda r, p, b: f"git merge --abort (if it stopped on conflicts) or git reset --merge {b['head'][:12]}"),
+    "merge_abort": Op("recoverable", "Cancel the merge in progress and go back to before it.",
+                      lambda r, p: ["merge", "--abort"], undo=lambda r, p, b: "run the merge again"),
+    "revert": Op("recoverable", "Add a new commit that undoes an old one. History is kept, safe on shared branches.",
+                 lambda r, p: ["revert", "--no-edit", _rev(r, p["rev"])],
+                 undo=lambda r, p, b: f"git reset --keep {b['head'][:12]}  (only if not pushed yet)"),
+    "cherry_pick": Op("recoverable", "Copy one commit onto the current branch.",
+                      lambda r, p: ["cherry-pick", _rev(r, p["rev"])],
+                      undo=lambda r, p, b: f"git reset --keep {b['head'][:12]}"),
+    "reset_soft": Op("recoverable", "Move the branch back; the undone changes stay staged.",
+                     lambda r, p: ["reset", "--soft", _rev(r, p["rev"])],
+                     undo=lambda r, p, b: f"git reset --soft {b['head'][:12]}"),
+    "amend": Op(lambda r, p: "dangerous" if _is_pushed(r) else "recoverable",
+                "Replace the last commit with the staged changes (and a new message).",
+                lambda r, p: ["commit", "--amend", "--no-verify", "-m", _message(p["message"])],
+                lose=lambda r, p: ["the current last commit is already on the remote; replacing it needs a force-push"]
+                if _is_pushed(r) else [], backup="head",
+                undo=lambda r, p, b: f"git reset --soft {b['head'][:12]}"),
+    "fetch": Op("recoverable", "Download new commits from the remote. Your branches don't move.",
+                lambda r, p: ["fetch", "--end-of-options", _remote(r, p["remote"])], undo=lambda r, p, b: "nothing to undo"),
+    "pull": Op("recoverable", "Download the remote branch and merge it into yours.",
+               lambda r, p: ["pull", "--no-rebase", "--no-edit", "--end-of-options", _remote(r, p["remote"]), _ref(r, p["branch"])],
+               undo=lambda r, p, b: f"git reset --merge {b['head'][:12]}"),
+    "push": Op("recoverable", "Publish your commits to the remote. Refused by git if the remote has commits you lack.",
+               lambda r, p: ["push", *(["--set-upstream"] if p.get("set_upstream") else []), "--no-verify",
+                             "--end-of-options", _remote(r, p["remote"]), _ref(r, p["branch"])],
+               undo=lambda r, p, b: "pushed commits are shared now; undo with git revert, not by rewriting"),
+    "stash": Op("recoverable", "Put uncommitted changes aside.", lambda r, p: ["stash", "push"],
+                undo=lambda r, p, b: "git stash pop"),
+    "stash_pop": Op("recoverable", "Bring back the last stashed changes.", lambda r, p: ["stash", "pop"],
+                    undo=lambda r, p, b: "git stash  (puts them aside again)"),
+    # ---- dangerous
+    "reset_hard": Op("dangerous", "Move the branch to a commit and THROW AWAY all uncommitted changes.",
+                     lambda r, p: ["reset", "--hard", _rev(r, p["rev"])],
+                     lose=lambda r, p: _oneline(r, f"{_rev(r, p['rev'])}..HEAD") +
+                     [f"uncommitted: {l}" for l in _git(r, "diff", "HEAD", "--stat", "--no-ext-diff").splitlines()[:-1]],
+                     backup="head+worktree"),
+    "push_force": Op("dangerous", "Overwrite the remote branch with yours (--force-with-lease).",
+                     lambda r, p: ["push", "--force-with-lease", "--no-verify", "--end-of-options",
+                                   _remote(r, p["remote"]), _ref(r, p["branch"])],
+                     lose=lambda r, p: [f"on the remote: {l}" for l in
+                                        _oneline(r, f"HEAD..refs/remotes/{_remote(r, p['remote'])}/{_ref(r, p['branch'])}")],
+                     backup="remote"),
+    "clean": Op("dangerous", "Delete untracked files and folders from disk (git has no copy of them).",
+                lambda r, p: ["clean", "-f", "-d"],
+                lose=lambda r, p: _git(r, "clean", "-n", "-d").splitlines(), backup="untracked"),
+    "rebase": Op("dangerous", "Replay your commits on top of another branch. Rewrites their ids.",
+                 lambda r, p: ["rebase", "--no-verify", "--end-of-options", _ref(r, p["onto"])],
+                 lose=lambda r, p: [f"rewritten: {l}" for l in _oneline(r, f"{_ref(r, p['onto'])}..HEAD")],
+                 backup="head"),
+    "delete_branch": Op("dangerous", "Delete a branch even if its commits are not merged anywhere.",
+                        lambda r, p: ["branch", "-D", "--end-of-options", _ref(r, p["name"])],
+                        lose=lambda r, p: _oneline(r, _ref(r, p["name"]), "--not",
+                                                   *[b for b in _git(r, "for-each-ref", "--format=%(refname)", "refs/heads").split()
+                                                     if b != f"refs/heads/{p['name']}"]),
+                        backup="branch"),
+}
+
+
+# ------------------------------------------------------------ prepare / execute
+
+def _binding(repo: Path, op: str, params: dict) -> str:
+    return json.dumps({"repo": str(repo), "op": op, "params": params, "head": _head(repo)}, sort_keys=True)
+
+
+def _sign(binding: str, nonce: str) -> str:
+    return hmac.new(_SECRET, (binding + nonce).encode(), hashlib.sha256).hexdigest()
+
+
+def _log(task_id: str, **fields) -> None:
+    LOG.parent.mkdir(parents=True, exist_ok=True)
+    row = {"ts": datetime.now(timezone.utc).isoformat(timespec="seconds"), "task_id": task_id, **fields}
+    with LOG.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, default=str) + "\n")
+
+
+def _tier(op: Op, repo, params) -> str:
+    return op.tier(repo, params) if callable(op.tier) else op.tier
+
+
+def _secret_files_staged_by(repo: Path, params: dict) -> list[str]:
+    paths = params.get("paths")
+    paths = [paths] if isinstance(paths, str) else (paths or [])
+    out = _git(repo, "ls-files", "--others", "--modified", "--exclude-standard", "--", *paths)
+    return [f for f in out.splitlines() if SECRET_FILE.search(f)]
+
+
+def _files_with_conflict_markers(repo: Path, params: dict) -> list[str]:
+    conflicted = _git(repo, "diff", "--name-only", "--diff-filter=U").splitlines()
+    paths = params.get("paths")
+    paths = [paths] if isinstance(paths, str) else (paths or [])
+    out = []
+    for f in conflicted:
+        if "." in paths or f in paths or any(f.startswith(p.rstrip("/") + "/") for p in paths):
+            text = (repo / f).read_text(encoding="utf-8", errors="replace") if (repo / f).is_file() else ""
+            if re.search(r"^<<<<<<< ", text, re.M) and re.search(r"^>>>>>>> ", text, re.M):
+                out.append(f)
+    return out
+
+
+def prepare(path: str, op: str, params: dict | None, task_id: str = "-") -> dict:
+    params = dict(params or {})
+    try:
+        repo = safe_git.check_repo(path)
+        if op in BLOCKED_OPS:
+            raise GitToolError(f"blocked: '{op}' is never run by the assistant")
+        if op not in OPS:
+            raise GitToolError(f"blocked: unknown operation '{op}'")
+        _no_credentials(params)
+        spec = OPS[op]
+        if op == "add":
+            marked = _files_with_conflict_markers(repo, params)
+            if marked:
+                raise GitToolError(f"blocked: {', '.join(marked)} still has conflict markers "
+                                   "(<<<<<<< ======= >>>>>>>). Edit the file or use resolve_conflict first.")
+            leaked = _secret_files_staged_by(repo, params)
+            if leaked:
+                raise GitToolError(f"blocked: this would stage files that usually hold secrets: {', '.join(leaked)}")
+        if op == "gitignore_add":
+            pattern = params.get("pattern", "")
+            if not re.fullmatch(r"[A-Za-z0-9._*/!-]{1,100}", pattern) or pattern.startswith("-"):
+                raise GitToolError(f"invalid .gitignore pattern: {pattern!r}")
+            preview = f"append {pattern!r} to .gitignore"
+        else:
+            preview = "git " + " ".join(spec.build(repo, params))   # validates every argument
+        tier = _tier(spec, repo, params)
+        lose = (spec.lose(repo, params) if spec.lose else []) if tier == "dangerous" else []
+    except GitToolError as e:
+        _log(task_id, op=op, params=_redacted(params), tier="blocked", outcome="refused", error=str(e))
+        return {"op": op, "tier": "blocked", "explain": str(e)}
+
+    binding = _binding(repo, op, params)
+    nonce = secrets.token_hex(8)
+    token = f"{nonce}.{_sign(binding, nonce)}"
+    entry = {"binding": binding, "expires": time.time() + TOKEN_TTL_S, "tier": tier}
+    out = {"op": op, "command": preview, "tier": tier, "explain": spec.explain, "approval_token": token}
+    if tier == "dangerous":
+        phrase = f"I accept the risk: {op}"
+        entry["phrase"] = phrase
+        out.update(would_lose=lose[:30] or ["nothing found to lose right now"], confirm_phrase=phrase,
+                   backup="a backup is created automatically before this step runs")
+    _PENDING[token] = entry
+    _log(task_id, op=op, params=_redacted(params), tier=tier, outcome="prepared")
+    return out
+
+
+def _redacted(params: dict) -> dict:
+    return json.loads(CREDENTIAL.sub("***", json.dumps(params)))
+
+
+def _make_backup(repo: Path, kind: str, op: str, params: dict) -> list[str]:
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(2)
+    base = f"refs/assistant-backup/{stamp}-{op}"
+    w = lambda *a: safe_git.run(repo, list(a), read_only=False)
+    made = []
+    if "head" in kind and _head(repo) != "unborn":
+        w("update-ref", f"{base}/head", _head(repo)); made.append(f"{base}/head")
+    if "worktree" in kind:
+        stash = _git(repo, "stash", "create").strip()
+        if stash:
+            w("update-ref", f"{base}/uncommitted", stash); made.append(f"{base}/uncommitted (git stash apply {base}/uncommitted)")
+    if kind == "branch":
+        tip = _rev(repo, params["name"])
+        w("update-ref", f"{base}/branch", tip); made.append(f"{base}/branch (git branch {params['name']} {tip[:12]})")
+    if kind == "remote":
+        ref = f"refs/remotes/{params['remote']}/{params['branch']}"
+        tip = _git(repo, "rev-parse", "--verify", "--quiet", ref, ok=(0, 1)).strip()
+        if tip:
+            w("update-ref", f"{base}/remote", tip); made.append(f"{base}/remote (what the remote had: {tip[:12]})")
+    if kind == "untracked":
+        dest = repo / ".git" / "assistant-backup" / stamp
+        for line in _git(repo, "clean", "-n", "-d").splitlines():
+            rel = line.removeprefix("Would remove ").strip()
+            src = repo / rel
+            if src.is_symlink():
+                continue
+            target = dest / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            (shutil.copytree if src.is_dir() else shutil.copy2)(src, target)
+        made.append(f"copied the untracked files to {dest}")
+    return made
+
+
+def _plain_state(s: dict) -> str:
+    if not s.get("is_repo"):
+        return "not a repo"
+    where = f"on branch {s['branch']}" if s["branch"] else f"detached at {s['head']}"
+    parts = [where]
+    if s.get("upstream"):
+        parts.append(f"{s['ahead']} ahead / {s['behind']} behind {s['upstream']}")
+    if s.get("in_progress"):
+        parts.append(f"a {s['in_progress']} is in progress")
+    for k in ("conflicted", "staged", "unstaged", "untracked"):
+        if s[k]["count"]:
+            parts.append(f"{s[k]['count']} {k}")
+    return ", ".join(parts) + ("" if any(s[k]["count"] for k in ("conflicted", "staged", "unstaged", "untracked"))
+                               else ", working tree clean")
+
+
+def execute(token: str, path: str, op: str, params: dict | None, confirmation: str | None = None,
+            task_id: str = "-") -> dict:
+    params = dict(params or {})
+    entry = _PENDING.pop(token, None)      # single use: popped even if the checks below fail
+    try:
+        repo = safe_git.check_repo(path)
+        if entry is None:
+            raise GitToolError("refused: unknown or already used approval token")
+        if time.time() > entry["expires"]:
+            raise GitToolError("refused: approval expired; prepare the step again")
+        nonce, sig = token.split(".", 1)
+        binding = _binding(repo, op, params)
+        if binding != entry["binding"] or not hmac.compare_digest(sig, _sign(binding, nonce)):
+            raise GitToolError("refused: this approval was for a different command or repo state; "
+                               "prepare and approve the step again")
+        if entry["tier"] == "dangerous" and confirmation != entry["phrase"]:
+            raise GitToolError(f"refused: dangerous step needs the confirmation phrase: {entry['phrase']}")
+        spec = OPS[op]
+        before = {"head": _head(repo), "branch": _current_branch(repo)}
+        backups = _make_backup(repo, spec.backup, op, params) if entry["tier"] == "dangerous" and spec.backup else []
+        if op == "gitignore_add":
+            gi = repo / ".gitignore"
+            safe_git.check_file_arg(repo, ".gitignore")
+            text = gi.read_text(encoding="utf-8") if gi.exists() else ""
+            if params["pattern"] not in text.splitlines():
+                gi.write_text(text + ("" if text.endswith("\n") or not text else "\n") + params["pattern"] + "\n",
+                              encoding="utf-8", newline="\n")
+            out_text = ""
+        else:
+            p = safe_git.run(repo, spec.build(repo, params), read_only=False, ok_codes=(0, 1))
+            out_text = (p.stdout + p.stderr).strip()
+            if p.returncode:
+                state = ir.repo_state(str(repo))
+                _log(task_id, op=op, params=_redacted(params), tier=entry["tier"], outcome="git_failed", error=out_text[:300])
+                return {"ok": False, "op": op, "output": out_text[-1500:], "state": _plain_state(state),
+                        "undo": spec.undo(repo, params, before) if spec.undo else None, "backups": backups}
+    except GitToolError as e:
+        _log(task_id, op=op, params=_redacted(params), outcome="refused", error=str(e))
+        return {"ok": False, "op": op, "refused": str(e)}
+
+    state = ir.repo_state(str(repo))
+    undo = [f"git reset --hard {b}" for b in backups if b.endswith("/head")]
+    undo += [b.split("(", 1)[1].rstrip(")") for b in backups if "(" in b]
+    if spec.undo:
+        undo.append(spec.undo(repo, params, before))
+    _log(task_id, op=op, params=_redacted(params), tier=entry["tier"], outcome="done",
+         head_before=before["head"], head_after=_head(repo), backups=backups)
+    return {"ok": True, "op": op, "output": out_text[-1500:], "state": _plain_state(state),
+            "head_before": before["head"][:12], "head_after": _head(repo)[:12],
+            "undo": undo, "backups": backups,
+            "log": ir.log(str(repo), 5, all_branches=False)}

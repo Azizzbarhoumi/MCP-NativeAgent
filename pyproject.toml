@@ -1,0 +1,43 @@
+# pyproject.toml: the single file that describes this Python project.
+# Tools like pip and uv read it to know the project name, Python version and dependencies.
+
+[project]
+name = "agent-platform"
+version = "0.1.0"
+description = "MCP-native multi-agent system with tool routing, safe actions and evaluation"
+requires-python = ">=3.11"
+
+# Core dependencies: only what step 1 and step 2 need. We add more as each step needs them.
+dependencies = [
+    "pydantic>=2.7",          # typed data models (evidence, action proposals)
+    "pydantic-settings>=2.3", # load config from .env into typed settings
+    "python-dotenv>=1.0",     # read the .env file
+    "httpx>=0.27",            # HTTP client (calling LLM APIs and other agents)
+    "fastapi>=0.111",         # web API for the orchestrator and agents
+    "uvicorn>=0.30",          # server that runs FastAPI apps
+    "langgraph>=0.2",         # agent graphs (step 2)
+    "langfuse>=2.0,<3",      # tracing; v2 SDK matches the v2 server in docker-compose
+    "pyyaml>=6.0",            # corpus manifest, question set, policy files (yaml)
+]
+
+[project.optional-dependencies]
+# Installed later with: pip install -e ".[knowledge]" etc.
+knowledge = ["qdrant-client>=1.20,<1.21", "fastembed>=0.5"]  # fastembed: ONNX embeddings, no PyTorch
+mcp = ["mcp>=1.0", "fastmcp>=2.0"]
+ui = ["streamlit>=1.36"]
+dev = ["pytest>=8.0", "ruff>=0.5"]
+
+# Tell setuptools exactly which folders are Python packages.
+# Without this it refuses to guess, because the project has many top-level folders.
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["common*", "orchestrator*", "agents*", "mcp_servers*", "knowledge*", "router*", "safety*", "memory*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100

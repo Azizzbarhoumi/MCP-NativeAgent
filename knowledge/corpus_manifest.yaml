@@ -1,0 +1,164 @@
+note: Raw documents are NOT committed (knowledge/corpus/ is git-ignored). Each source
+  keeps its original license; attribution below. Benchmark data in eval/ci_runs/ is
+  never part of this corpus (see docs/decisions/0001-benchmark-isolation.md).
+sources:
+- name: github_actions_docs
+  repo: https://github.com/github/docs
+  commit: d7487f5debb5a5a2a6e65e6f9fa539266f5f8db6
+  license: CC-BY-4.0 (docs content); code MIT
+  attribution: GitHub Docs, (c) GitHub, Inc., licensed CC BY 4.0, https://github.com/github/docs
+  folders:
+  - content/actions/
+  files: 60
+  candidates_seen: 208
+  url_template: https://docs.github.com/en/{path_no_ext}
+  url_strip: content/
+- name: docker_docs
+  repo: https://github.com/docker/docs
+  commit: 747e4c7528c703b357b1ae83cbbf411229ce59d2
+  license: Apache-2.0
+  attribution: Docker Docs, (c) Docker Inc., Apache License 2.0, https://github.com/docker/docs
+  folders:
+  - content/manuals/build/
+  - content/reference/dockerfile.md
+  - content/manuals/compose/
+  files: 60
+  candidates_seen: 115
+  url_template: https://docs.docker.com/{path_no_ext}/
+  url_strip: content/manuals/
+- name: fastapi_docs
+  repo: https://github.com/fastapi/fastapi
+  commit: 05e6df7e906c3decba377c37548019973f40bf15
+  license: MIT
+  attribution: FastAPI docs, (c) Sebastian Ramirez, MIT, https://github.com/fastapi/fastapi
+  folders:
+  - docs/en/docs/
+  files: 60
+  candidates_seen: 147
+  url_template: https://fastapi.tiangolo.com/{path_no_ext}/
+  url_strip: docs/en/docs/
+- name: ruff_docs
+  repo: https://github.com/astral-sh/ruff
+  commit: 7be385f21d0848e58668b75cd90d0927637c84b6
+  license: MIT
+  attribution: Ruff docs, (c) Charles Marsh / Astral, MIT, https://github.com/astral-sh/ruff
+  folders:
+  - docs/
+  files: 16
+  candidates_seen: 16
+  url_template: https://docs.astral.sh/ruff/{path_no_ext}/
+  url_strip: docs/
+- name: pytest_docs
+  repo: https://github.com/pytest-dev/pytest
+  commit: 718929265449ca33040264152ba5e7022e766a52
+  license: MIT
+  attribution: pytest docs, (c) Holger Krekel and others, MIT, https://github.com/pytest-dev/pytest
+  folders:
+  - doc/en/how-to/
+  - doc/en/reference/
+  - doc/en/explanation/
+  - doc/en/getting-started.rst
+  files: 36
+  candidates_seen: 36
+  url_template: https://docs.pytest.org/en/stable/{path_no_ext}.html
+  url_strip: doc/en/
+- name: celery_docs
+  repo: https://github.com/celery/celery
+  commit: a2d470f198444db889608537a5792216b447429e
+  license: BSD-3-Clause
+  attribution: Celery docs, (c) Asif Saif Uddin, Ask Solem & contributors, BSD 3-Clause,
+    https://github.com/celery/celery
+  folders:
+  - docs/userguide/
+  files: 21
+  candidates_seen: 21
+  url_template: https://docs.celeryq.dev/en/stable/userguide/{path_no_ext}.html
+  url_strip: docs/userguide/
+- name: git_official_docs
+  collection: git_docs
+  repo: https://github.com/git/git
+  commit: 77904e546de3bd940621092ecec47a88d0cede5d
+  license: GPL-2.0
+  attribution: Git documentation, (c) the Git contributors, GPL-2.0, https://github.com/git/git
+  folders:
+  - Documentation/user-manual.adoc
+  - Documentation/gittutorial.adoc
+  - Documentation/gittutorial-2.adoc
+  - Documentation/giteveryday.adoc
+  - Documentation/gitglossary.adoc
+  - Documentation/gitworkflows.adoc
+  - Documentation/gitrevisions.adoc
+  - Documentation/gitcredentials.adoc
+  - Documentation/gitignore.adoc
+  - Documentation/git-add.adoc
+  - Documentation/git-commit.adoc
+  - Documentation/git-status.adoc
+  - Documentation/git-log.adoc
+  - Documentation/git-diff.adoc
+  - Documentation/git-branch.adoc
+  - Documentation/git-checkout.adoc
+  - Documentation/git-switch.adoc
+  - Documentation/git-restore.adoc
+  - Documentation/git-merge.adoc
+  - Documentation/git-mergetool.adoc
+  - Documentation/git-rebase.adoc
+  - Documentation/git-reset.adoc
+  - Documentation/git-revert.adoc
+  - Documentation/git-cherry-pick.adoc
+  - Documentation/git-stash.adoc
+  - Documentation/git-fetch.adoc
+  - Documentation/git-pull.adoc
+  - Documentation/git-push.adoc
+  - Documentation/git-remote.adoc
+  - Documentation/git-clone.adoc
+  - Documentation/git-init.adoc
+  - Documentation/git-reflog.adoc
+  - Documentation/git-rm.adoc
+  - Documentation/git-mv.adoc
+  - Documentation/git-clean.adoc
+  - Documentation/git-tag.adoc
+  - Documentation/git-config.adoc
+  - Documentation/git-credential.adoc
+  - Documentation/git-bisect.adoc
+  - Documentation/git-blame.adoc
+  - Documentation/git-show.adoc
+  - Documentation/git-rerere.adoc
+  - Documentation/git-filter-branch.adoc
+  - Documentation/git-gc.adoc
+  - Documentation/git-fsck.adoc
+  files: 45
+  candidates_seen: 45
+  url_template: https://git-scm.com/docs/{path_no_ext}
+  url_strip: Documentation/
+- name: github_git_docs
+  collection: git_docs
+  repo: https://github.com/github/docs
+  commit: e0b0c900ea2465ce1697fdbef73debd206d0274e
+  license: CC-BY-4.0 (docs content); code MIT
+  attribution: GitHub Docs, (c) GitHub, Inc., licensed CC BY 4.0, https://github.com/github/docs
+  folders:
+  - content/get-started/using-git/
+  - content/get-started/git-basics/
+  - content/pull-requests/collaborating-with-pull-requests/
+  - content/authentication/
+  files: 60
+  candidates_seen: 87
+  url_template: https://docs.github.com/en/{path_no_ext}
+  url_strip: content/
+- name: progit_book
+  collection: git_docs
+  repo: https://github.com/progit/progit2
+  commit: a013e3230a1207cfa5ae94d28ba7d2021063c337
+  license: 'CC-BY-NC-SA-3.0 (NON-COMMERCIAL: remove before any commercial use)'
+  attribution: Pro Git, 2nd ed., Scott Chacon and Ben Straub, CC BY-NC-SA 3.0, https://github.com/progit/progit2
+  folders:
+  - book/01-introduction/
+  - book/02-git-basics/
+  - book/03-git-branching/
+  - book/05-distributed-git/
+  - book/06-github/
+  - book/07-git-tools/
+  files: 43
+  candidates_seen: 43
+  url_template: https://github.com/progit/progit2/blob/main/{path_no_ext}.asc
+  url_strip: ''

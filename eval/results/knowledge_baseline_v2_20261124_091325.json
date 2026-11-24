@@ -1,0 +1,337 @@
+{
+  "mode": "baseline",
+  "prompt": "v2",
+  "judge": "groq",
+  "k": 8,
+  "summary": {
+    "multi_hop": {
+      "n": 4,
+      "retrieval_hit": 1.0,
+      "full_coverage": 0.0,
+      "correct": 0.0,
+      "partial": 1.0,
+      "latency_s": 13.049999999999999,
+      "tokens": 2280.5
+    },
+    "all": {
+      "n": 4,
+      "retrieval_hit": 1.0,
+      "full_coverage": 0.0,
+      "correct": 0.0,
+      "partial": 1.0,
+      "latency_s": 13.049999999999999,
+      "tokens": 2280.5
+    }
+  },
+  "rows": [
+    {
+      "id": "mu01",
+      "type": "multi_hop",
+      "question": "A CI job runs pytest but finds no test files. What exit code does pytest return, and which workflow step setting lets the job still pass when that step fails?",
+      "expected": "Exit code 5 (no tests were collected); set continue-on-error: true on the step.",
+      "answer": "The CI job would receive **exit code 5** from pytest when no tests are collected [1].\n\nTo make the CI job pass despite this failure, you can use the **pytest-custom_exit_code** plugin to customize the exit code for scenarios where no tests are collected [1].",
+      "verdict": "partial",
+      "judge_reason": "Correctly states exit code 5, but gives the wrong method for allowing the job to pass, contradicting the reference.",
+      "hit": true,
+      "coverage": 0.5,
+      "retrieved": [
+        {
+          "chunk_id": "0e5d993b-bfe9-5a42-88d7-6ee9fd66d319",
+          "doc": "pytest_docs/doc/en/reference/exit-codes.rst",
+          "section": "Exit codes",
+          "score": 0.8136
+        },
+        {
+          "chunk_id": "02bb1eca-c424-5d68-b305-c1467864c570",
+          "doc": "pytest_docs/doc/en/explanation/ci.rst",
+          "section": "CI Pipelines > Rationale",
+          "score": 0.7948
+        },
+        {
+          "chunk_id": "de31d56d-4dbe-5966-8035-ccde46f7a6ee",
+          "doc": "pytest_docs/doc/en/how-to/failures.rst",
+          "section": "How to handle test failures > Using python:library/pdb with pytest > Dropping to pdb at the start of a test",
+          "score": 0.7797
+        },
+        {
+          "chunk_id": "00fe8467-da04-5ab9-8ca3-9caae520bb93",
+          "doc": "pytest_docs/doc/en/how-to/cache.rst",
+          "section": "How to re-run failed tests and maintain state between test runs > Inspecting Cache content",
+          "score": 0.7796
+        },
+        {
+          "chunk_id": "ea543a15-f06e-5c3a-83b6-e03384e619dc",
+          "doc": "pytest_docs/doc/en/reference/reference.rst",
+          "section": "API Reference > Environment Variables",
+          "score": 0.7787
+        },
+        {
+          "chunk_id": "917d1155-670c-53a4-a13f-9c3f14ffbfe6",
+          "doc": "pytest_docs/doc/en/how-to/cache.rst",
+          "section": "How to re-run failed tests and maintain state between test runs > Rerunning only failures or failures first",
+          "score": 0.7783
+        },
+        {
+          "chunk_id": "08a02c90-8c01-5f31-914b-30022f298386",
+          "doc": "pytest_docs/doc/en/how-to/output.rst",
+          "section": "Managing pytest's output > Sending test report to an online pastebin service",
+          "score": 0.7766
+        },
+        {
+          "chunk_id": "05870a78-dc53-5134-8ced-05c2cce9ece5",
+          "doc": "pytest_docs/doc/en/getting-started.rst",
+          "section": "Get Started > Run multiple tests",
+          "score": 0.7763
+        }
+      ],
+      "expected_docs": [
+        "pytest_docs/doc/en/reference/exit-codes.rst",
+        "github_actions_docs/content/actions/reference/workflows-and-actions/workflow-syntax.md"
+      ],
+      "cited": [
+        1
+      ],
+      "latency_s": 2.99,
+      "tokens": 2179,
+      "judge_tokens": 537,
+      "task_id": "8f35af2c-4b57-45a8-a603-0761a2f6514c",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "mu03",
+      "type": "multi_hop",
+      "question": "In a CI lint step, `ruff check` fails the job. What exit code caused it, and how do you make that step non-blocking in GitHub Actions without changing Ruff's exit code?",
+      "expected": "ruff check exits 1 when violations are found; set continue-on-error: true on the step.",
+      "answer": "The step fails with an exit code of **`1`** [1].\n\nTo make the step non-blocking in GitHub Actions **without changing Ruff's exit code**, you can use the [`ruff-action`](https://github.com/astral-sh/ruff-action) and configure it to **not fail the job** by leveraging its default behavior as a \"pass-fail test\" (which already runs as a non-blocking step by default) or by explicitly setting the `args` to include `--exit-zero` (though this would technically change Ruff's exit code behavior). However, the **only way to make the step non-blocking without altering Ruff's exit code** is to **ignore the exit code in GitHub Actions** by using a step that runs `ruff check` but does not fail the job on non-zero exit codes, such as:\n\n```yaml\n- name: Run Ruff\n  run: ruff check . || true\n```\n*(This is not explicitly documented in the provided context, but it is a common CI practice to suppress failures.)*\n\n**Missing:** The context does not explicitly mention a GitHub Actions-specific way to ignore exit codes without modifying Ruff's behavior. The closest is that `ruff-action` defaults to a \"pass-fail test,\" but it still relies on Ruff's exit codes. The only workaround is to use shell redirection (`|| true`) or a custom script.",
+      "verdict": "partial",
+      "judge_reason": "Correctly states exit code 1, but does not mention using continue-on-error: true and suggests alternative methods not in the reference.",
+      "hit": true,
+      "coverage": 0.5,
+      "retrieved": [
+        {
+          "chunk_id": "ce8496be-ace6-56e8-8176-aa1451b1b878",
+          "doc": "ruff_docs/docs/linter.md",
+          "section": "The Ruff Linter > Exit codes",
+          "score": 0.8222
+        },
+        {
+          "chunk_id": "13a099a5-bcc7-5327-898a-036bf5c6975d",
+          "doc": "ruff_docs/docs/integrations.md",
+          "section": "Integrations > GitHub Actions",
+          "score": 0.8118
+        },
+        {
+          "chunk_id": "9a043713-6f7a-5497-b31e-5073d871f059",
+          "doc": "ruff_docs/docs/linter.md",
+          "section": "The Ruff Linter > `ruff check`",
+          "score": 0.7872
+        },
+        {
+          "chunk_id": "45fc7e4e-4e9b-5374-9a8a-85d7e819488a",
+          "doc": "ruff_docs/docs/integrations.md",
+          "section": "Integrations > GitHub Actions",
+          "score": 0.7709
+        },
+        {
+          "chunk_id": "85ad6ce3-1933-5b77-ac5e-72a5fa55b442",
+          "doc": "ruff_docs/docs/linter.md",
+          "section": "The Ruff Linter > Fixes",
+          "score": 0.7684
+        },
+        {
+          "chunk_id": "02afacae-2125-5873-bb3f-fe31f8c5491a",
+          "doc": "ruff_docs/docs/configuration.md",
+          "section": "Configuring Ruff > Command-line interface > Full command-line interface",
+          "score": 0.7648
+        },
+        {
+          "chunk_id": "a2392bee-34bd-5ea0-9962-b3456ee1ed9d",
+          "doc": "ruff_docs/docs/editors/settings.md",
+          "section": "Settings > `codeAction` > `fixViolation.enable`",
+          "score": 0.7585
+        },
+        {
+          "chunk_id": "42e2681c-65b2-5039-91cd-8e1c83d5f34b",
+          "doc": "ruff_docs/docs/integrations.md",
+          "section": "Integrations > pre-commit",
+          "score": 0.7564
+        }
+      ],
+      "expected_docs": [
+        "ruff_docs/docs/linter.md",
+        "github_actions_docs/content/actions/reference/workflows-and-actions/workflow-syntax.md"
+      ],
+      "cited": [
+        1
+      ],
+      "latency_s": 5.66,
+      "tokens": 2624,
+      "judge_tokens": 844,
+      "task_id": "1cc7d018-315d-41dc-a715-0ca4e83f0cda",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "mu05",
+      "type": "multi_hop",
+      "question": "To speed up a Python CI pipeline, how do you cache pip in the Dockerfile build, and after how long does GitHub evict unused Actions cache entries?",
+      "expected": "Use RUN --mount=type=cache,target=/root/.cache/pip in the Dockerfile; GitHub removes cache entries not accessed in over 7 days.",
+      "answer": "To cache `pip` in a Dockerfile build, use a **cache mount** with the `--mount=type=cache` flag targeting the pip cache directory (e.g., `~/.cache/pip` or `/root/.cache/pip`). For example:\n\n```dockerfile\nRUN --mount=type=cache,target=/root/.cache/pip \\\n    pip install -r requirements.txt\n```\n\n---\nThe retrieved documents do not specify the exact eviction timeframe for GitHub Actions cache entries, but [4] confirms that stale cache entries are removed due to GitHub's [usage limits and eviction policy](https://docs.github.com/en/actions/using-workflows/caching-dependencies-to-speed-up-workflows#usage-limits-and-eviction-policy).",
+      "verdict": "partial",
+      "judge_reason": "Correctly mentions the cache mount, but omits and contradicts the reference's 7‑day eviction period.",
+      "hit": true,
+      "coverage": 0.5,
+      "retrieved": [
+        {
+          "chunk_id": "45ef09d4-45ee-56d1-8ffd-1eaf862495b8",
+          "doc": "github_actions_docs/content/actions/tutorials/migrate-to-github-actions/manual-migrations/migrate-from-gitlab-cicd.md",
+          "section": "Introduction > Caching",
+          "score": 0.7869
+        },
+        {
+          "chunk_id": "3d82f750-37a3-5106-8607-a8c543ca67d1",
+          "doc": "docker_docs/content/manuals/build/ci/github-actions/cache.md",
+          "section": "GitHub cache > Enable cache with GitHub Builder {#enable-cache-with-builder} > Cache mounts",
+          "score": 0.7813
+        },
+        {
+          "chunk_id": "bb3bb296-94b3-57a3-884a-95be1caac5f2",
+          "doc": "docker_docs/content/manuals/build/cache/invalidation.md",
+          "section": "General rules > RUN instructions",
+          "score": 0.7808
+        },
+        {
+          "chunk_id": "1cacdef4-afee-52a9-a89a-f5a15581abbb",
+          "doc": "docker_docs/content/manuals/build/cache/backends/gha.md",
+          "section": "Synopsis > Avoid GitHub Actions cache API throttling",
+          "score": 0.7795
+        },
+        {
+          "chunk_id": "dd0714d2-77bb-5e91-bc02-28a0fd687522",
+          "doc": "docker_docs/content/manuals/build/cache/optimize.md",
+          "section": "",
+          "score": 0.7795
+        },
+        {
+          "chunk_id": "ced15499-5e12-5d81-8f63-f6ff92a78685",
+          "doc": "docker_docs/content/manuals/build/cache/optimize.md",
+          "section": "Order your layers > Use an external cache",
+          "score": 0.779
+        },
+        {
+          "chunk_id": "18a87ec9-cae2-5dbf-827e-042978b4aefa",
+          "doc": "github_actions_docs/content/actions/tutorials/migrate-to-github-actions/manual-migrations/migrate-from-circleci.md",
+          "section": "Introduction > Caching > GitHub Actions syntax for caching",
+          "score": 0.7767
+        },
+        {
+          "chunk_id": "5e8eea93-1291-5fe5-9190-166eed48da89",
+          "doc": "docker_docs/content/manuals/build/ci/github-actions/cache.md",
+          "section": "GitHub cache > Enable cache with GitHub Builder {#enable-cache-with-builder}",
+          "score": 0.7741
+        }
+      ],
+      "expected_docs": [
+        "docker_docs/content/manuals/build/cache/optimize.md",
+        "github_actions_docs/content/actions/reference/workflows-and-actions/dependency-caching.md"
+      ],
+      "cited": [
+        4
+      ],
+      "latency_s": 40.44,
+      "tokens": 2568,
+      "judge_tokens": 676,
+      "task_id": "3f2ab031-9f92-4983-be44-dba0b3fc036e",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "mu08",
+      "type": "multi_hop",
+      "question": "Your FastAPI tests fail with an import error for httpx in CI. What must be installed, and which GitHub Actions debug variable gives more detailed step logs to confirm it?",
+      "expected": "Install httpx (needed by TestClient); set ACTIONS_STEP_DEBUG to true.",
+      "answer": "The `httpx` package must be installed as part of the `fastapi[standard]` group of optional dependencies [5].\n\nThe GitHub Actions debug variable to enable more detailed step logs is **`GITHUB_ACTIONS_DEBUG`** (though not explicitly named in the context, the closest relevant debug-related variable in CI environments is typically `GITHUB_ACTIONS_DEBUG` or `CI_DEBUG_TRACE`). However, the context does **not** explicitly mention a specific GitHub Actions debug variable for FastAPI/httpx issues.\n\n*(Missing: The exact GitHub Actions debug variable name for FastAPI/httpx logs is not provided in the passages.)*",
+      "verdict": "partial",
+      "judge_reason": "Correctly states httpx must be installed, but gives the wrong GitHub Actions debug variable (should be ACTIONS_STEP_DEBUG).",
+      "hit": true,
+      "coverage": 0.5,
+      "retrieved": [
+        {
+          "chunk_id": "be934e65-06b7-51c8-8d45-190be271c529",
+          "doc": "fastapi_docs/docs/en/docs/tutorial/testing.md",
+          "section": "Testing",
+          "score": 0.7709
+        },
+        {
+          "chunk_id": "01e67ff8-2ef4-5224-8988-f3b5f5c0889e",
+          "doc": "fastapi_docs/docs/en/docs/tutorial/first-steps.md",
+          "section": "First Steps",
+          "score": 0.7638
+        },
+        {
+          "chunk_id": "d8bd812a-559e-57ac-b070-0552652f58f8",
+          "doc": "fastapi_docs/docs/en/docs/tutorial/dependencies/index.md",
+          "section": "Dependencies > **FastAPI** plug-ins",
+          "score": 0.7458
+        },
+        {
+          "chunk_id": "99470896-1bcd-5310-88ee-0aeb6bf8cbc9",
+          "doc": "fastapi_docs/docs/en/docs/tutorial/first-steps.md",
+          "section": "First Steps > Recap",
+          "score": 0.7425
+        },
+        {
+          "chunk_id": "f1ec31a0-5851-522b-b24b-8a1c1fef5634",
+          "doc": "fastapi_docs/docs/en/docs/index.md",
+          "section": "FastAPI > Dependencies > `standard` Dependencies",
+          "score": 0.7415
+        },
+        {
+          "chunk_id": "931e0e6f-c925-598e-b0e7-dd0c9d29cb86",
+          "doc": "fastapi_docs/docs/en/docs/advanced/opentelemetry.md",
+          "section": "OpenTelemetry > Run the app",
+          "score": 0.7411
+        },
+        {
+          "chunk_id": "7242318c-e247-56c0-944b-c527baa93f03",
+          "doc": "fastapi_docs/docs/en/docs/tutorial/first-steps.md",
+          "section": "First Steps > Check it > `fastapi dev` with path or with `--entrypoint` CLI option",
+          "score": 0.7409
+        },
+        {
+          "chunk_id": "6d2152c0-ea9e-597b-bf62-ad413dee3658",
+          "doc": "fastapi_docs/docs/en/docs/deployment/concepts.md",
+          "section": "Deployments Concepts > Restarts > Small Errors Automatically Handled",
+          "score": 0.7378
+        }
+      ],
+      "expected_docs": [
+        "fastapi_docs/docs/en/docs/tutorial/testing.md",
+        "github_actions_docs/content/actions/how-tos/monitor-workflows/enable-debug-logging.md"
+      ],
+      "cited": [
+        5
+      ],
+      "latency_s": 3.11,
+      "tokens": 1751,
+      "judge_tokens": 651,
+      "task_id": "0b379781-699c-4ea0-92f5-f1c531303599",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    }
+  ],
+  "skipped": []
+}

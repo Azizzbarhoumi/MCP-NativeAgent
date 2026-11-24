@@ -1,0 +1,6 @@
+{
+  "name": "research-agent",
+  "description": "Web search + fetch, injection check on pages, cited answers.",
+  "skills": [],
+  "endpoint": "TODO"
+}
