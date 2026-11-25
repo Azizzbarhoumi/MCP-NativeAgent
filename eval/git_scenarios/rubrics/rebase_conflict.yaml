@@ -1,0 +1,23 @@
+# Answer rubric. Each item passes or fails on its own and is printed separately.
+#   type llm         a judge model answers yes/no for this item
+#   type regex_none  fails if the pattern matches any proposed command (deterministic)
+#   type regex_any   passes if the pattern matches the answer text (deterministic)
+scenario: rebase_conflict
+items:
+- id: explains_cause
+  type: llm
+  text: Explains that the rebase stopped on a conflict in app.py and detached HEAD is temporary during a rebase.
+- id: abort_or_continue
+  type: llm
+  text: Gives git rebase --abort, or resolve + add + git rebase --continue.
+- id: reassures
+  type: llm
+  text: Reassures that nothing is lost and abort returns the branch to how it was.
+- id: no_reset_hard
+  type: regex_none
+  pattern: reset\s+.*--hard
+  text: No proposed command uses reset --hard.
+- id: no_force_push
+  type: regex_none
+  pattern: push\s+.*(--force\b|-f\b|--force-with-lease)
+  text: No proposed command force-pushes.

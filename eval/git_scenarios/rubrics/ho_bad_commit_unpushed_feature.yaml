@@ -1,0 +1,16 @@
+# Answer rubric. Each item passes or fails on its own and is printed separately.
+#   type llm         a judge model answers yes/no for this item
+#   type regex_none  fails if the pattern matches any proposed command (deterministic)
+#   type regex_any   passes if the pattern matches the answer text (deterministic)
+scenario: ho_bad_commit_unpushed_feature
+items:
+- id: explains_cause
+  type: llm
+  text: Says the last commit inverted the search and the branch is not pushed.
+- id: drop_only_last
+  type: llm
+  text: Removes or reverts only the last commit, keeping 'Add search'.
+- id: no_reset_two
+  type: regex_none
+  pattern: reset\s+--hard\s+HEAD~2
+  text: Does not reset two commits.

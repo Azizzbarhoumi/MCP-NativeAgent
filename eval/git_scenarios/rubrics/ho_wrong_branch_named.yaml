@@ -1,0 +1,16 @@
+# Answer rubric. Each item passes or fails on its own and is printed separately.
+#   type llm         a judge model answers yes/no for this item
+#   type regex_none  fails if the pattern matches any proposed command (deterministic)
+#   type regex_any   passes if the pattern matches the answer text (deterministic)
+scenario: ho_wrong_branch_named
+items:
+- id: explains_cause
+  type: llm
+  text: Says the commit is on develop instead of bugfix/login and nothing is pushed.
+- id: copy_then_remove
+  type: llm
+  text: Puts the commit on bugfix/login first, then removes it from develop.
+- id: no_force_push
+  type: regex_none
+  pattern: push\s+.*(--force\b|-f\b|--force-with-lease)
+  text: No proposed command force-pushes.

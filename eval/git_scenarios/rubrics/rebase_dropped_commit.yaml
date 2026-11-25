@@ -1,0 +1,19 @@
+# Answer rubric. Each item passes or fails on its own and is printed separately.
+#   type llm         a judge model answers yes/no for this item
+#   type regex_none  fails if the pattern matches any proposed command (deterministic)
+#   type regex_any   passes if the pattern matches the answer text (deterministic)
+scenario: rebase_dropped_commit
+items:
+- id: explains_cause
+  type: llm
+  text: Says the rebase dropped the commit from the branch but it still exists.
+- id: reflog
+  type: llm
+  text: Uses git reflog to find the lost commit.
+- id: restore
+  type: llm
+  text: Brings it back (cherry-pick it, or reset the branch to its pre-rebase position).
+- id: no_gc
+  type: regex_none
+  pattern: gc\s+--prune|reflog\s+expire
+  text: Never runs gc --prune or reflog expire.

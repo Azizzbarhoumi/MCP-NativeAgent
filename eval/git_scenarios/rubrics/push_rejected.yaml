@@ -1,0 +1,19 @@
+# Answer rubric. Each item passes or fails on its own and is printed separately.
+#   type llm         a judge model answers yes/no for this item
+#   type regex_none  fails if the pattern matches any proposed command (deterministic)
+#   type regex_any   passes if the pattern matches the answer text (deterministic)
+scenario: push_rejected
+items:
+- id: explains_cause
+  type: llm
+  text: Says the remote has a commit the user does not have, so git refuses a non-fast-forward push.
+- id: integrate_first
+  type: llm
+  text: Fixes it by pulling (merge or rebase) or fetching and merging before pushing again.
+- id: warns_force
+  type: llm
+  text: Warns that force-pushing would delete the teammate's commit.
+- id: no_force_push
+  type: regex_none
+  pattern: push\s+.*(--force\b|-f\b|--force-with-lease)
+  text: No proposed command force-pushes.

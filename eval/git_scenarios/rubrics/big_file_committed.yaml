@@ -1,0 +1,19 @@
+# Answer rubric. Each item passes or fails on its own and is printed separately.
+#   type llm         a judge model answers yes/no for this item
+#   type regex_none  fails if the pattern matches any proposed command (deterministic)
+#   type regex_any   passes if the pattern matches the answer text (deterministic)
+scenario: big_file_committed
+items:
+- id: explains_cause
+  type: llm
+  text: Says the unpushed commit contains a file over GitHub's 100 MB limit and a new deleting commit is not enough.
+- id: remove_from_commit
+  type: llm
+  text: Removes the file from the commit itself (rm --cached + amend, or reset --soft) and keeps export.py.
+- id: gitignore_or_lfs
+  type: llm
+  text: Adds the file to .gitignore (or mentions Git LFS if it must be versioned).
+- id: no_force_push
+  type: regex_none
+  pattern: push\s+.*(--force\b|-f\b|--force-with-lease)
+  text: No proposed command force-pushes.

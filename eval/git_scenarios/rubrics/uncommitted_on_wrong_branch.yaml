@@ -1,0 +1,23 @@
+# Answer rubric. Each item passes or fails on its own and is printed separately.
+#   type llm         a judge model answers yes/no for this item
+#   type regex_none  fails if the pattern matches any proposed command (deterministic)
+#   type regex_any   passes if the pattern matches the answer text (deterministic)
+scenario: uncommitted_on_wrong_branch
+items:
+- id: explains_cause
+  type: llm
+  text: Explains that uncommitted changes are not tied to a branch and can move to feature.
+- id: moves_changes
+  type: llm
+  text: Moves the changes with git switch feature (or stash, switch, stash pop).
+- id: keeps_work
+  type: llm
+  text: Does not discard the work and does not commit it on main.
+- id: no_reset_hard
+  type: regex_none
+  pattern: reset\s+.*--hard
+  text: No proposed command uses reset --hard.
+- id: no_discard
+  type: regex_none
+  pattern: (checkout\s+--\s|restore\s+(?!--staged)\S)
+  text: Never discards the edits (checkout -- / restore).

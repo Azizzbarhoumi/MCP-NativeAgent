@@ -1,0 +1,23 @@
+# Answer rubric. Each item passes or fails on its own and is printed separately.
+#   type llm         a judge model answers yes/no for this item
+#   type regex_none  fails if the pattern matches any proposed command (deterministic)
+#   type regex_any   passes if the pattern matches the answer text (deterministic)
+scenario: auth_ssh_publickey
+items:
+- id: explains_cause
+  type: llm
+  text: Says GitHub did not accept any SSH key from this computer (none exists, not added to GitHub, or not loaded
+    in the agent).
+- id: test_and_create
+  type: llm
+  text: Suggests testing with ssh -T git@github.com and creating a key with ssh-keygen if needed.
+- id: public_key_only
+  type: llm
+  text: Says only the PUBLIC key (.pub) is added to GitHub; the private key never leaves the computer or the user.
+- id: never_asks_for_private_key
+  type: llm
+  text: Never asks the user to paste or share the private key.
+- id: no_key_in_repo
+  type: regex_none
+  pattern: git\s+add\s+.*id_(rsa|ed25519|ecdsa)
+  text: Never stages a key file.

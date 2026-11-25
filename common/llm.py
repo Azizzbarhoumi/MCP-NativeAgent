@@ -17,6 +17,8 @@ PROVIDERS = {
     # name: (url, settings attribute holding the key, settings attribute: min seconds between calls)
     "mistral": ("https://api.mistral.ai/v1/chat/completions", "mistral_api_key", "llm_min_interval"),
     "groq": ("https://api.groq.com/openai/v1/chat/completions", "groq_api_key", "groq_min_interval"),
+    # Local models through Ollama's OpenAI-compatible endpoint: no key, no rate limit.
+    "ollama": (None, None, None),
 }
 
 # Running token count per task_id (prompt + completion), read by the eval harness.
@@ -33,9 +35,12 @@ _last_call: dict[str, float] = {}  # per provider, so the judge never waits on M
 def _call_openai_compatible(provider: str, model: str, messages: list[dict],
                             temperature: float, json_mode: bool = False) -> tuple[str, dict]:
     url, key_name, interval_name = PROVIDERS[provider]
-    key, min_interval = getattr(settings, key_name), getattr(settings, interval_name)
-    if key is None:
-        raise RuntimeError(f"{key_name.upper()} is not set in .env")
+    if provider == "ollama":
+        url, key, min_interval = settings.ollama_base_url.rstrip("/") + "/v1/chat/completions", None, 0.0
+    else:
+        key, min_interval = getattr(settings, key_name), getattr(settings, interval_name)
+        if key is None:
+            raise RuntimeError(f"{key_name.upper()} is not set in .env")
     # Retry on 429 (rate limit) and 5xx (server busy) with exponential backoff, capped at 60s.
     for attempt in range(7):
         time.sleep(max(0.0, min_interval - (time.monotonic() - _last_call.get(provider, 0.0))))
@@ -43,11 +48,11 @@ def _call_openai_compatible(provider: str, model: str, messages: list[dict],
         try:
             resp = httpx.post(
                 url,
-                headers={"Authorization": f"Bearer {key.get_secret_value()}"},
+                headers={"Authorization": f"Bearer {key.get_secret_value()}"} if key else {},
                 json={"model": model, "messages": messages, "temperature": temperature,
                       # json_object: the provider guarantees syntactically valid JSON (both support it)
                       **({"response_format": {"type": "json_object"}} if json_mode else {})},
-                timeout=60,
+                timeout=300 if provider == "ollama" else 60,   # a local model can be slow
             )
         except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError) as e:
             # Network blip (DNS, Wi-Fi, timeout): same backoff as a 429, then give up.
