@@ -280,10 +280,16 @@ def auth_https_password(root: Path) -> Scenario:
     )
 
 
-SCENARIOS: list[Callable[[Path], Scenario]] = [
+BASE: list[Callable[[Path], Scenario]] = [
     merge_conflict, push_rejected, detached_head, wrong_branch_commit,
     pushed_bad_commit, committed_secret, no_upstream, auth_https_password,
 ]
+
+# Imported here, after the helpers above exist (extra.py and heldout.py use them).
+from eval.git_scenarios.extra import EXTRA  # noqa: E402
+from eval.git_scenarios.heldout import HELD_OUT  # noqa: E402
+
+SCENARIOS: list[Callable[[Path], Scenario]] = BASE + EXTRA + HELD_OUT
 
 
 def scenario_dict(s: Scenario) -> dict:

@@ -86,6 +86,8 @@ def main() -> None:
         t0 = time.perf_counter()
         try:
             response, hits, timing = answer_question(q["question"], task_id, k=a.k, mode=a.mode, prompt=a.prompt, check=a.check, decomposition=a.decompose)
+        except llm.ProviderAccessError as e:  # no key / no budget: every next question would fail too
+            raise SystemExit(f"stopping: {e}")
         except Exception as e:  # one API failure must not lose the whole run
             print(f"[ERR ] {q['id']} skipped: {type(e).__name__}: {str(e)[:120]}\n")
             rows_skipped.append(q["id"])
@@ -127,6 +129,10 @@ def main() -> None:
                   + (" -> REFUSED" if timing.get("refused_by_checker") else ""))
         print(f"        judge : {reason}\n")
 
+    if not rows:
+        # Every question failed (bad key, no budget, network): say so instead of crashing in table().
+        raise SystemExit(f"0 questions answered; all {len(rows_skipped)} failed with API errors: {rows_skipped}. "
+                         "Check the provider key/budget and re-run.")
     summary = summarize(rows)
     tag = a.prompt + ("_check" if a.check else "") + ("_decomp" if a.decompose else "")
     label = f"{a.mode}+{tag}"
@@ -159,10 +165,12 @@ def main() -> None:
     out.mkdir(exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     base = out / f"knowledge_{a.mode}_{tag}_{stamp}"
-    base.with_suffix(".json").write_text(json.dumps({"mode": a.mode, "prompt": tag, "judge": a.judge, "k": a.k, "summary": summary, "rows": rows,
+    answer_model = f"{settings.llm_provider}/{settings.llm_model}"
+    base.with_suffix(".json").write_text(json.dumps({"mode": a.mode, "prompt": tag, "judge": a.judge, "k": a.k,
+                                                     "answer_model": answer_model, "summary": summary, "rows": rows,
                                                      "skipped": rows_skipped},
                                                     indent=2, ensure_ascii=False), encoding="utf-8")
-    base.with_suffix(".md").write_text(f"# Knowledge eval: {label}\n\n{md}\n\n## Failures\n\n{fail_md or '(none)'}\n",
+    base.with_suffix(".md").write_text(f"# Knowledge eval: {label}\n\nAnswer model: {answer_model}, judge: {a.judge}\n\n{md}\n\n## Failures\n\n{fail_md or '(none)'}\n",
                                        encoding="utf-8")
     print(f"\nsaved {base}.json / .md")
     flush()

@@ -168,6 +168,11 @@ OPS: dict[str, Op] = {
                 undo=lambda r, p, b: f"git merge --abort (if it stopped on conflicts) or git reset --merge {b['head'][:12]}"),
     "merge_abort": Op("recoverable", "Cancel the merge in progress and go back to before it.",
                       lambda r, p: ["merge", "--abort"], undo=lambda r, p, b: "run the merge again"),
+    "rebase_abort": Op("recoverable", "Cancel the rebase in progress and put the branch back as it was.",
+                       lambda r, p: ["rebase", "--abort"], undo=lambda r, p, b: "run the rebase again"),
+    "rebase_continue": Op("recoverable", "Go on with the rebase after the conflicts are resolved and staged.",
+                          lambda r, p: ["rebase", "--continue"],
+                          undo=lambda r, p, b: f"git reset --keep ORIG_HEAD  (the branch before the rebase)"),
     "revert": Op("recoverable", "Add a new commit that undoes an old one. History is kept, safe on shared branches.",
                  lambda r, p: ["revert", "--no-edit", _rev(r, p["rev"])],
                  undo=lambda r, p, b: f"git reset --keep {b['head'][:12]}  (only if not pushed yet)"),
@@ -323,9 +328,20 @@ def _make_backup(repo: Path, kind: str, op: str, params: dict) -> list[str]:
     if "head" in kind and _head(repo) != "unborn":
         w("update-ref", f"{base}/head", _head(repo)); made.append(f"{base}/head")
     if "worktree" in kind:
-        stash = _git(repo, "stash", "create").strip()
-        if stash:
-            w("update-ref", f"{base}/uncommitted", stash); made.append(f"{base}/uncommitted (git stash apply {base}/uncommitted)")
+        conflicted = _git(repo, "diff", "--name-only", "--diff-filter=U").splitlines()
+        if conflicted:
+            # `git stash create` refuses an index with conflicts: copy the files instead.
+            dest = repo / ".git" / "assistant-backup" / stamp
+            for rel in conflicted + _git(repo, "diff", "--name-only", "HEAD").splitlines():
+                src = repo / rel
+                if src.is_file() and not src.is_symlink():
+                    (dest / rel).parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src, dest / rel)
+            made.append(f"copied the changed and conflicted files to {dest}")
+        else:
+            stash = _git(repo, "stash", "create").strip()
+            if stash:
+                w("update-ref", f"{base}/uncommitted", stash); made.append(f"{base}/uncommitted (git stash apply {base}/uncommitted)")
     if kind == "branch":
         tip = _rev(repo, params["name"])
         w("update-ref", f"{base}/branch", tip); made.append(f"{base}/branch (git branch {params['name']} {tip[:12]})")

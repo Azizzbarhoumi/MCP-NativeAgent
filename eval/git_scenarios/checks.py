@@ -98,7 +98,9 @@ def no_upstream(root, snap):
 
 CHECKS = {f.__name__: f for f in [merge_conflict, push_rejected, detached_head, wrong_branch_commit,
                                   pushed_bad_commit, committed_secret, no_upstream]}
-# auth_https_password has no repo check on purpose: nothing can be fixed locally, so its
+from eval.git_scenarios.checks_extra import CHECKS_EXTRA  # noqa: E402  (Phase 2 scenarios)
+CHECKS.update(CHECKS_EXTRA)
+# The auth scenarios have no repo check on purpose: nothing can be fixed locally, so its
 # broken repo would "pass". It is graded on the answer (rubrics/) plus the invariants.
 
 

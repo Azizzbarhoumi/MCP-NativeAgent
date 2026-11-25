@@ -22,6 +22,11 @@ PROVIDERS = {
 # Running token count per task_id (prompt + completion), read by the eval harness.
 TOKENS: dict[str, int] = {}
 
+class ProviderAccessError(RuntimeError):
+    """401/402/403: bad key, no budget or no access. Retrying or moving on to the next
+    question cannot help, so callers should stop the run."""
+
+
 _last_call: dict[str, float] = {}  # per provider, so the judge never waits on Mistral's spacing
 
 
@@ -57,6 +62,8 @@ def _call_openai_compatible(provider: str, model: str, messages: list[dict],
         wait = float(resp.headers.get("retry-after", min(5 * 2 ** attempt, 60)))
         print(f"[llm] {resp.status_code} from {provider}, retrying in {wait:.0f}s (attempt {attempt + 1}/7)")
         time.sleep(wait)
+    if resp.status_code in (401, 402, 403):
+        raise ProviderAccessError(f"{provider} HTTP {resp.status_code}: {resp.text[:300]}")
     if resp.status_code >= 400:
         # Show the provider's reason (bad key, unknown model, region block...). The body never
         # contains our key, so it is safe to print.
