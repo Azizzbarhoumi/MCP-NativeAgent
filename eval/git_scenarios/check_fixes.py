@@ -21,7 +21,7 @@ from datetime import datetime
 from pathlib import Path
 
 from eval.git_scenarios.checks import check, invariants, snapshot
-from eval.git_scenarios.scenarios import SCENARIOS, run
+from eval.git_scenarios.scenarios import SCENARIOS, run, scenario_dict
 
 BUILD = Path(__file__).resolve().parent / "build" / "state_checks"
 RESULTS = Path(__file__).resolve().parents[1] / "results"
@@ -68,20 +68,32 @@ BYPASS = {
 }
 
 
-def run_steps(work: Path, steps, ex) -> list[dict]:
+def run_steps(work: Path, steps, ex, task_id: str = "state-check") -> list[dict]:
+    """Every step is approved by this script (and confirmed when dangerous), like a user
+    who clicks yes; the log records that, so the invariants can check it."""
     log = []
     for op, params in steps:
-        p = ex.prepare(str(work), op, params, task_id="state-check")
+        p = ex.prepare(str(work), op, params, task_id=task_id)
         entry = {"op": op, "tier": p["tier"], "command": p.get("command")}
         if p["tier"] == "blocked":
             entry["result"] = "blocked by the tool: " + p["explain"]
         else:
-            r = ex.execute(p["approval_token"], str(work), op, params, p.get("confirm_phrase"), task_id="state-check")
+            confirm = p.get("confirm_phrase")
+            r = ex.execute(p["approval_token"], str(work), op, params, confirm, task_id=task_id)
+            entry.update(approved=True, confirmed=bool(confirm))
             entry["result"] = "ok" if r.get("ok") else "failed: " + (r.get("refused") or r.get("output", ""))[-200:]
             entry["backups"] = r.get("backups", [])
             entry["state"] = r.get("state")
+            entry["output"] = r.get("output", "")
         log.append(entry)
     return log
+
+
+def log_rows(ex, task_id: str) -> list[dict]:
+    if not ex.LOG.exists():
+        return []
+    rows = [json.loads(l) for l in ex.LOG.read_text(encoding="utf-8").splitlines() if l.strip()]
+    return [r for r in rows if r.get("task_id") == task_id]
 
 
 def main() -> None:
@@ -99,11 +111,13 @@ def main() -> None:
             root.mkdir(parents=True)
             key = build(root)
             row["grading"] = key.grading
-            snap = snapshot(root)
-            log = run_steps(root / "work", steps, ex)
+            snap = snapshot(root, key.repo)
+            task_id = f"state-check-{variant}-{sid}"
+            log = run_steps(root / key.repo, steps, ex, task_id)
             if variant == "bad" and sid in BYPASS:
-                BYPASS[sid](root / "work")
-            res, inv = check(sid, root, snap), invariants(root)
+                BYPASS[sid](root / key.repo)
+            res = check(sid, root, snap)
+            inv = invariants(root, snap, scenario_dict(key), log, log_rows(ex, task_id))
             dangerous = [s for s in log if s["tier"] == "dangerous" and s["result"] == "ok"]
             row[variant] = {**res, "invariants": inv, "steps": log,
                             "dangerous_without_backup": sum(not s.get("backups") for s in dangerous)}
@@ -135,7 +149,15 @@ def main() -> None:
         lines.append(f"- {r['id']}: no repo check. Credential invariant: broken repo "
                      f"{'ok' if r['broken']['invariants']['passed'] else 'BROKEN'}, after the mistake "
                      f"({r['bad_label']}) {'ok' if r['bad']['invariants']['passed'] else 'BROKEN'}.")
-    lines += ["", "Invariants (every scenario):", "", "| scenario | variant | invariant | ok | detail |", "|---|---|---|---|---|"]
+    lines += ["", "Invariants, summary (the reference fix must keep all of them):", "",
+              "| scenario | broken repo | reference fix | beginner mistake | broken on the mistake |", "|---|---|---|---|---|"]
+    count = lambda c: f"{sum(x['ok'] for x in c)}/{len(c)}"
+    for r in rows:
+        bad_failed = "; ".join(c["check"] for c in r["bad"]["invariants"]["checks"] if not c["ok"])
+        lines.append(f"| {r['id']} | {count(r['broken']['invariants']['checks'])} | "
+                     f"{count(r['reference']['invariants']['checks'])} | {count(r['bad']['invariants']['checks'])} | "
+                     f"{bad_failed or '-'} |")
+    lines += ["", "Invariants, every check:", "", "| scenario | variant | invariant | ok | detail |", "|---|---|---|---|---|"]
     for r in rows:
         for var in ("broken", "reference", "bad"):
             for c in r[var]["invariants"]["checks"]:
