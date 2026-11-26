@@ -2,7 +2,10 @@
 
 Groups result files by setting and prints mean, min and max for each group:
   knowledge runs  setting = mode + prompt tag (check/decomp) + answer model + judge
-  git e2e runs    setting = tag + answer model + judge, tuned and held-out kept apart
+  git e2e runs    setting = tag + answer model + judge, tuned and held-out kept apart. A file
+                  that ran one set only (--set tuned / held_out) joins the same setting, and
+                  only fills its own column. Replays (--replay) are left out: they rerun one
+                  recorded plan, so they are not an independent run.
 
 Usage:
   python -m eval.average_runs eval/results/knowledge_*_20261126_*.json
@@ -63,28 +66,38 @@ def knowledge_table(runs: list[dict]) -> list[str]:
 
 
 E2E_KEYS = ("passed", "diagnosis_correct", "repo_state_correct", "invariants_all_kept", "rubric_items_ok",
-            "risk_tier_agreement")
+            "risk_tier_agreement", "beginner_items_ok")
 E2E_SUMS = ("dangerous_without_backup", "risk_under_rated_steps", "usd_estimate_total")
+
+
+def setting_tag(tag: str) -> str:
+    """'assistant_tuned' and 'assistant_held_out' are halves of one setting: 'assistant'."""
+    for part in ("_tuned", "_held_out"):
+        if tag.endswith(part) or f"{part}_x" in tag:
+            return tag.replace(part, "", 1)
+    return tag
 
 
 def e2e_table(runs: list[dict]) -> list[str]:
     groups = defaultdict(list)
     for r in runs:
         s = r["summary"]
-        groups[(s["tag"], s["answer_model"], s["judge"])].append(s)
+        groups[(setting_tag(s["tag"]), s["answer_model"], s["judge"])].append(s)
     lines = ["## Git assistant end to end (mean and min-max over runs)", ""]
     for (tag, model, judge), ss in sorted(groups.items()):
-        lines += [f"**{tag}**: answer model {model}, judge {judge}, {len(ss)} run file(s)", "",
+        have = {part: [s for s in ss if s[part].get("answers")] for part in ("tuned", "held_out")}
+        beginner = sorted({k for s in ss for part in have for k in s[part] if k.startswith("beginner.")})
+        lines += [f"**{tag}**: answer model {model}, judge {judge}, {len(have['tuned'])} tuned and "
+                  f"{len(have['held_out'])} held-out run(s)", "",
                   "| metric | tuned | held-out |", "|---|---|---|"]
-        for k in E2E_KEYS:
-            row = []
-            for part in ("tuned", "held_out"):
-                vals = [v for v in (parse_pct(s[part].get(k)) for s in ss) if v is not None]
-                row.append(stats(vals))
+        for k in E2E_KEYS + tuple(beginner):
+            row = [stats([v for v in (parse_pct(s[part].get(k)) for s in have[part]) if v is not None])
+                   for part in ("tuned", "held_out")]
             lines.append(f"| {k} | {row[0]} | {row[1]} |")
         for k in E2E_SUMS:
-            lines.append(f"| {k} (mean per run file) | {mean(s['tuned'].get(k, 0) for s in ss):.3g} | "
-                         f"{mean(s['held_out'].get(k, 0) for s in ss):.3g} |")
+            row = [f"{mean(s[part].get(k, 0) for s in have[part]):.3g}" if have[part] else "n/a"
+                   for part in ("tuned", "held_out")]
+            lines.append(f"| {k} (mean per run) | {row[0]} | {row[1]} |")
         lines.append("")
     return lines
 
@@ -101,6 +114,9 @@ def main() -> None:
         if "mode" in d and "rows" in d:
             know.append(d)
         elif "summary" in d and "tuned" in d["summary"]:
+            if d["summary"].get("replayed_from") or d["summary"].get("tag", "").startswith("replay_"):
+                print(f"skipped (a replay of {d['summary'].get('replayed_from', 'a recorded run')}, not an independent run): {f}")
+                continue
             e2e.append(d)
         else:
             print(f"skipped (unknown format): {f}")
