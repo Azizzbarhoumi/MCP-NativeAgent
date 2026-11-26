@@ -603,3 +603,39 @@ number is an honest baseline. Tests: `tests/test_beginner_rubric.py` (3).
 
 https://github.com/Azizzbarhoumi/MCP-NativeAgent/pull/1, from `overnight/2026-11-26` to
 `main`. The description carries no AI attribution. It will be updated with the final numbers.
+
+### Task 3: live tests on your PC (done: 2 real retrieval misses, reported as they are)
+
+**Result.** With Qdrant up (`git_docs`, 1,543 points), `tests/test_git_docs_retrieval.py` gives
+**11 passed, 2 failed**. The full suite on your PC gives **272 passed, 2 failed, 1 skipped**.
+The 2 failures are these same two probes; nothing else fails.
+
+**The two misses** (expected pages not loosened):
+1. *"Save my uncommitted work temporarily so I can switch branches"* expects `git-stash` or
+   Pro Git's `stashing`. Top 5: user-manual ×2, git-reset, basic-branching-and-merging,
+   git-switch.
+2. *"I lost a commit after a reset, how can I find it again?"* expects `git-reflog`, `reflog`,
+   `revision-selection` or `maintenance`. Top 5: user-manual, git-reset, user-manual, undoing,
+   git-fsck.
+
+**Diagnosis** (read-only, on your PC):
+- **The pages are indexed:** git-stash has 16 chunks, stashing-cleaning 10 and git-reflog 7. So
+  this is a ranking problem, not missing data.
+- **Q1:** BM25 ranks Pro Git "Stashing Your Work" **1st**, but dense search ranks the Pro Git
+  stash page only 7th. The fused list (RRF) puts the user-manual sections first.
+- **Q2:** git-reflog.adoc isn't in either top 20.
+- **Honest nuance:** the user-manual sections that win, "Temporarily setting aside work in
+  progress" (Q1) and "Recovering lost changes > Reflogs" (Q2), do contain the right answer. The
+  probe matches file paths, so it counts them as misses. I left the test as it is, as you asked.
+
+**Something I tried and turned off again.** I tried a cap of at most 2 chunks per document in the
+top 5 for git_docs (`retrieval.max_per_doc`). It **changed no probe result**. The user manual
+dropped from 4 slots to 2, but the stash and reflog pages still didn't make the top 5. I turned
+it off so the assistant's retrieval doesn't change without a measured gain. The option stays in
+the config, default off.
+
+**What's next (your decision):**
+- (a) Accept user-manual sections as right answers by also matching section names in the probe.
+  This is a test change, so it's yours to make.
+- (b) Try fusion weighted toward BM25 for git_docs, because exact command words matter there.
+  This needs a retrieval benchmark run before it's kept.
