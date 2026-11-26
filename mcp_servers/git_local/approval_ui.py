@@ -102,7 +102,7 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'")
-        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Referrer-Policy", "same-origin")   # no-referrer would make browsers send "Origin: null" on our own form posts
         if location:
             self.send_header("Location", location)
         self.end_headers()

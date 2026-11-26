@@ -132,13 +132,55 @@ Inspect a repo by hand (read-only):
 python -m mcp_servers.git_local eval\git_scenarios\build\merge_conflict\work --rate "git push --force"
 ```
 
+## Local web UI
+
+One command builds a broken scenario repo and opens it in your browser:
+
+```bat
+python -m git_assistant.webui --demo                  :: merge conflict
+python -m git_assistant.webui --demo push_rejected    :: or any tuned scenario
+python -m git_assistant.webui                         :: start empty, build repos from the page
+```
+
+The page address (with a random secret in it) and every approval code are printed in that
+terminal. For each repo the page shows:
+- the problem: what the user said, the command that failed and its real output;
+- the repo state, read by the tool;
+- the plain-language explanation: from the assistant (one LLM call; it uses your Groq budget),
+  or from the scenario's answer key when you click "Show the answer key instead" (no LLM);
+- the proposed fix, with a risk tier on every step. The tiers come from the one table in
+  `mcp_servers/git_local/tiers.py`, which the tool also enforces.
+
+Running a step goes through the tool's approval gate:
+- **safe** steps run with one click;
+- **careful** steps need the single-use approval code from the terminal. The code expires
+  after 10 minutes, and 3 wrong tries cancel the step;
+- **destructive** steps need the code **and** the typed phrase, and a backup is made first.
+
+With `GIT_APPROVAL_UI=1`, an Approve button carries the code instead, as described in
+`docs/approval_page.md`. This is off by default. After each step the repo is inspected again,
+and "Did it work?" shows the scenario's state check plus the safety checks: no data loss, no
+rewrite of shared history, backups, no leaked secret, and `git fsck`.
+
+For now the UI only works on scenario repos it builds in a temporary workspace, and the git
+tool is limited to that folder. The 6 held-out scenarios are not offered. The page listens on
+127.0.0.1 only, checks the Host and Origin headers, and has no JavaScript.
+
+| the problem and the repo | plan, tiers and approval | after the fix |
+|---|---|---|
+| ![problem](docs/screenshots/webui_problem_and_state.png) | ![plan](docs/screenshots/webui_plan_and_approval.png) | ![fixed](docs/screenshots/webui_fixed.png) |
+
+The screenshots use the answer-key plan (no LLM), so they show the flow, not the assistant's
+wording.
+
 ## Repository layout
 
 ```
 common/            LLM client (Mistral, Groq), config, tracing (Langfuse)
 knowledge/         acquisition, ingestion, retrieval, answering, checker, graph export
 mcp_servers/       git_local (hardened local git tool); config/ holds the GitHub MCP env file (git-ignored)
-git_assistant/     diagnose pipeline: inspect -> retrieve -> plan -> rate -> safety review
+git_assistant/     diagnose pipeline: inspect -> retrieve -> plan -> rate -> safety review;
+                   webui.py + session.py: the local web UI
 orchestrator/      LangGraph orchestrator using the read-only GitHub MCP server
 eval/              knowledge eval, git scenarios, state checks, invariants, rubrics, results
 tests/             chunking, RRF, metrics, redaction, git tool security, grader

@@ -179,11 +179,17 @@ It uses your LLM budget (one or two calls).</p></div>""")
         rows = "".join(
             f"<tr><td>{x['step']}</td><td><code>{e(x['command'])}</code></td><td>{badge(x.get('tier')) if x.get('tier') in TIER_COLOR else e(x.get('tier', ''))}</td>"
             f"<td>{e(x.get('result', ''))}{'<pre>' + e(x['output']) + '</pre>' if x.get('output') else ''}</td>"
-            f"<td>{e('; '.join(x.get('backups') or [])) or '-'}</td><td>{e(x.get('undo') or '-')}</td></tr>"
+            f"<td>{e('; '.join(x.get('backups') or [])) or '-'}</td><td>{e(_undo(x.get('undo')))}</td></tr>"
             for x in case.ran)
         parts.append(f'<div class="card"><h2>What ran</h2><table><tr><th>step</th><th>command</th><th>tier</th>'
                      f'<th>result</th><th>backup</th><th>undo</th></tr>{rows}</table></div>')
     return page(f"{k['title']} · Git assistant", "".join(parts))
+
+
+def _undo(u) -> str:
+    if not u:
+        return "-"
+    return "; ".join(map(str, u)) if isinstance(u, (list, tuple)) else str(u)
 
 
 def approval_html(ws: Workspace, case, r: str) -> str:
@@ -242,7 +248,7 @@ def create_app(ws: Workspace, secret: str, allowed_hosts: set[str]) -> FastAPI:
             resp = PlainTextResponse("cross-site request refused", status_code=403)
         else:
             resp = await call_next(request)
-        resp.headers.update({"Cache-Control": "no-store", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer",
+        resp.headers.update({"Cache-Control": "no-store", "X-Frame-Options": "DENY", "Referrer-Policy": "same-origin",
                              "X-Content-Type-Options": "nosniff",
                              "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; "
                                                         "form-action 'self'; frame-ancestors 'none'"})

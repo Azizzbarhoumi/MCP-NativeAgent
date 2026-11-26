@@ -258,3 +258,36 @@ def test_the_tool_cannot_reach_outside_the_workspace(ui, tmp_path):
     outside.mkdir()
     subprocess.run(["git", "init", "-q", str(outside)], check=True)
     assert ex.prepare(str(outside), "stash", {})["tier"] == "blocked"
+
+
+def test_referrer_policy_lets_our_own_forms_post(ui):
+    """With Referrer-Policy: no-referrer a browser sends "Origin: null" on the page's own form
+    posts, and the cross-site guard then refuses every button (found when driving the page in
+    Chromium). same-origin keeps the real Origin for our forms and sends nothing elsewhere."""
+    from mcp_servers.git_local import approval_ui
+    import inspect
+    assert ui.get(f"/{SECRET}/").headers["referrer-policy"] == "same-origin"
+    assert '"Referrer-Policy", "same-origin"' in inspect.getsource(approval_ui)
+    name = build(ui, "push_rejected")
+    r = ui.post(f"/{SECRET}/repo/{name}/diagnose", data={"mode": "key"}, headers={"origin": "null"})
+    assert r.status_code == 403                    # an opaque origin is still refused
+
+
+def test_demo_is_one_command(tmp_path, monkeypatch, capsys):
+    """`python -m git_assistant.webui --demo` builds the broken repo, limits the tool to the
+    workspace, serves on 127.0.0.1 only and prints the address in the terminal."""
+    import os
+    import uvicorn
+    from git_assistant import webui
+    seen = {}
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kw: seen.update(kw, app=app))
+    monkeypatch.setattr(webui.webbrowser, "open", lambda url: seen.update(opened=url))
+    monkeypatch.setattr(webui.threading, "Timer", lambda delay, f, args: type("T", (), {"start": lambda s: f(*args)})())
+    monkeypatch.setattr(ex, "LOG", tmp_path / "exec.jsonl")
+    monkeypatch.setenv("GIT_TOOL_ALLOWED_ROOTS", "/somewhere/else")
+    webui.main(["--demo", "--workspace", str(tmp_path / "ws"), "--port", "8799"])
+    assert seen["host"] == "127.0.0.1" and seen["port"] == 8799
+    assert os.environ["GIT_TOOL_ALLOWED_ROOTS"] == str((tmp_path / "ws").resolve())
+    assert (tmp_path / "ws" / "merge_conflict-1" / "work" / ".git").exists()
+    err = capsys.readouterr().err
+    assert "http://127.0.0.1:8799/" in err and seen["opened"] in err and "/repo/merge_conflict-1" in seen["opened"]
