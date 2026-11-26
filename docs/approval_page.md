@@ -42,7 +42,7 @@ One card per step the assistant prepared, newest last. The page refreshes every 
   web page from reaching the server through DNS rebinding.
 - **Origin checked on POST:** a form submitted from another website gets 403.
 - **Strict headers:** CSP allows no scripts at all, `X-Frame-Options: DENY`, `no-store`,
-  `no-referrer`.
+  `Referrer-Policy: same-origin` (`no-referrer` would make browsers send `Origin: null` on the page's own forms).
 - **Everything escaped:** commit messages and branch names are HTML-escaped (tested with
   `<script>`).
 - **No approval tool for the model:** the MCP tools expose `step_status` only (tested).
