@@ -172,7 +172,7 @@ def test_forged_token_is_refused(repo):
 def test_dangerous_needs_phrase_and_makes_backup(repo):
     (repo / "a.txt").write_text("changed but not committed\n")
     p = ex.prepare(str(repo), "reset_hard", {"rev": "HEAD"})
-    assert p["tier"] == "dangerous" and any("a.txt" in l for l in p["would_lose"])
+    assert p["tier"] == "destructive" and any("a.txt" in l for l in p["would_lose"])
     assert not ex.execute(p["approval_token"], str(repo), "reset_hard", {"rev": "HEAD"}, "yes")["ok"]
     p = ex.prepare(str(repo), "reset_hard", {"rev": "HEAD"})
     r = ex.execute(p["approval_token"], str(repo), "reset_hard", {"rev": "HEAD"}, p["confirm_phrase"])
@@ -252,7 +252,7 @@ def test_path_spellings_that_escape_or_reach_git_dir_are_refused(repo, bad):
 def test_backslash_paths_inside_the_repo_still_work(repo):
     (repo / "src").mkdir()
     (repo / "src" / "m.py").write_text("x\n")
-    assert ex.prepare(str(repo), "add", {"paths": ["src\\m.py"]})["tier"] == "recoverable"
+    assert ex.prepare(str(repo), "add", {"paths": ["src\\m.py"]})["tier"] == "safe"
 
 
 # ------------------------------------------------------------ option injection
@@ -308,7 +308,7 @@ def test_token_as_url_user_name_is_blocked(repo):
     p = ex.prepare(str(repo), "push", {"remote": "origin", "branch": "main"})
     assert p["tier"] == "blocked" and "credential" in p["explain"]
     git(repo, "remote", "set-url", "origin", "ssh://git@example.invalid/a/b.git")     # a normal ssh user is fine
-    assert ex.prepare(str(repo), "push", {"remote": "origin", "branch": "main"})["tier"] == "recoverable"
+    assert ex.prepare(str(repo), "push", {"remote": "origin", "branch": "main"})["tier"] == "careful"
 
 
 # ------------------------------------------------------------ hooks, local and on the remote
@@ -402,11 +402,11 @@ def test_step_cannot_become_dangerous_after_approval(repo):
     it). HEAD moved, so the old approval no longer counts and the new prepare says dangerous."""
     git(repo, "switch", "-q", "--detach")
     p = ex.prepare(str(repo), "switch", {"branch": "main"})
-    assert p["tier"] == "recoverable"
+    assert p["tier"] == "safe"
     (repo / "d.txt").write_text("d\n"); git(repo, "add", "d.txt"); git(repo, "commit", "-q", "-m", "detached work")
     r = ex.execute(p["approval_token"], str(repo), "switch", {"branch": "main"})
     assert not r["ok"] and "repo state" in r["refused"]
-    assert ex.prepare(str(repo), "switch", {"branch": "main"})["tier"] == "dangerous"
+    assert ex.prepare(str(repo), "switch", {"branch": "main"})["tier"] == "destructive"
 
 
 @pytest.mark.parametrize("op,params", [("resolve_conflict", {"path": "a.txt", "side": "sideways"}), ("switch", {}),

@@ -33,7 +33,7 @@ def checks(root, snap, key=None, steps=None, log_rows=None):
 
 
 def reset_step(**kw):
-    return {"op": "reset_hard", "tier": "dangerous", "result": "ok", "approved": True, "confirmed": True,
+    return {"op": "reset_hard", "tier": "destructive", "result": "ok", "approved": True, "confirmed": True,
             "backups": ["refs/assistant-backup/x/head"], **kw}
 
 
@@ -124,7 +124,7 @@ def test_reset_by_hand_is_unapproved(scn):
 
 def test_dangerous_step_without_confirmation_is_caught(scn):
     snap = inv.snapshot(scn)
-    step = {"op": "push_force", "tier": "dangerous", "result": "ok", "approved": True, "confirmed": False,
+    step = {"op": "push_force", "tier": "destructive", "result": "ok", "approved": True, "confirmed": False,
             "backups": ["x"]}
     assert not rule(checks(scn, snap, steps=[step]), "without approval")[1]
 

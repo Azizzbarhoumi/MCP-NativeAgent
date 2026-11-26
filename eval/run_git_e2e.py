@@ -5,7 +5,7 @@ For every scenario (fresh repo each run):
   2. diagnose: the assistant reads the repo and the docs and proposes steps (git_assistant)
   3. translate each step into a typed tool operation (git_assistant/translate.py)
   4. approve with a fixed policy, held by THIS code, never by the model:
-       recoverable -> approved; dangerous -> approved with the confirmation phrase (or refused
+       safe/careful -> approved; destructive -> approved with the confirmation phrase (or refused
        with --dangerous refuse); blocked -> recorded, never run. Manual edits are simulated only
        when the plan asks for them and names the file (eval/git_scenarios/manual.py).
   5. execute through mcp_servers.git_local.execute (backups, single-use tokens, logging)
@@ -39,6 +39,7 @@ from eval.git_scenarios import rubric as rubric_mod
 from eval.git_scenarios.checks import check, invariants, snapshot
 from eval.git_scenarios.manual import MANUAL
 from eval.git_scenarios.scenarios import SCENARIOS, scenario_dict
+from mcp_servers.git_local.tiers import TIERS
 
 EVAL = Path(__file__).resolve().parent
 BUILD = EVAL / "git_scenarios" / "build" / "e2e"
@@ -75,14 +76,15 @@ diagnosis partial = right area but misses an expected idea."""
 
 
 def planner_vs_tool(planner: str | None, tool: str) -> str:
-    """'agree', 'under' (the plan called it safe/careful, the tool says dangerous/blocked: the
-    risky disagreement) or 'over' (the plan called it destructive, the tool says recoverable)."""
-    if planner is None or tool == "blocked":
+    """'agree', 'under' (the plan showed the user a lower tier than the tool enforces: the risky
+    disagreement) or 'over'. Both sides use the one table in tiers.py, so on one step in one repo
+    state they should always agree; a split command (pull --rebase = fetch + rebase) is compared
+    per operation."""
+    if planner is None or tool == "blocked" or planner not in TIERS or tool not in TIERS:
         return "n/a"          # blocked steps never run; they are counted on their own
-    risky_tool = tool in ("dangerous", "blocked")
-    if planner == "destructive":
-        return "agree" if risky_tool else "over"
-    return "under" if risky_tool else "agree"
+    if TIERS.index(tool) > TIERS.index(planner):
+        return "under"
+    return "over" if TIERS.index(tool) < TIERS.index(planner) else "agree"
 
 
 def oracle_plan(key: dict) -> dict:
@@ -112,11 +114,11 @@ def execute_plan(sid: str, work: Path, plan: dict, task_id: str, dangerous: str)
                      "op": a.op or a.kind, "planner_tier": step.get("tier")}
             if a.kind == "op":
                 p = ex.prepare(str(work), a.op, a.params, task_id=task_id)
-                entry.update(tier=p["tier"], params=a.params, agreement=planner_vs_tool(step.get("tier"), p["tier"]))
+                entry.update(tier=p["tier"], params=a.params)
                 if p["tier"] == "blocked":
                     entry["result"] = "blocked by the tool: " + p["explain"]
-                elif p["tier"] == "dangerous" and dangerous == "refuse":
-                    entry["result"] = "refused by the approval policy (dangerous)"
+                elif p["tier"] == "destructive" and dangerous == "refuse":
+                    entry["result"] = "refused by the approval policy (destructive)"
                 else:
                     phrase = p.get("confirm_phrase")
                     r = ex.execute(p["approval_token"], str(work), a.op, a.params, phrase, task_id=task_id)
@@ -132,6 +134,16 @@ def execute_plan(sid: str, work: Path, plan: dict, task_id: str, dangerous: str)
             else:
                 entry.update(tier=a.kind, result="skipped", note=a.note)
             log.append(entry)
+        # One comparison per proposed command: the tier the plan showed vs the highest tier the
+        # tool gave its operations (pull --rebase = fetch + rebase is rated as the rebase).
+        ops = [e for e in log if e["step"] == i and e.get("kind") == "op" and e.get("tier") in TIERS]
+        if ops:
+            top = max(ops, key=lambda e: TIERS.index(e["tier"]))
+            for e in ops:
+                e["agreement"] = planner_vs_tool(step.get("tier"), top["tier"]) if e is top else "n/a"
+        for e in log:
+            if e["step"] == i and e.get("kind") == "op" and e.get("tier") == "blocked":
+                e["agreement"] = "n/a"
     return log
 
 
@@ -254,8 +266,8 @@ def run_one(build, run: int, a, task_prefix: str) -> dict:
         executed=sum(s.get("result") == "ok" and s.get("kind") == "op" for s in steps),
         blocked=sum(str(s.get("result", "")).startswith("blocked") for s in steps),
         unsupported=sum(s.get("kind") == "unsupported" for s in steps),
-        dangerous_executed=sum(s.get("tier") == "dangerous" and s.get("result") == "ok" for s in steps),
-        dangerous_without_backup=sum(s.get("tier") == "dangerous" and s.get("result") == "ok" and not s.get("backups")
+        dangerous_executed=sum(s.get("tier") == "destructive" and s.get("result") == "ok" for s in steps),
+        dangerous_without_backup=sum(s.get("tier") == "destructive" and s.get("result") == "ok" and not s.get("backups")
                                      for s in steps),
         latency_s=round(time.monotonic() - t0, 1), plan_latency_s=round(t_plan, 1),
         **cost(task_id), answer=ans, plan=[s.get("command", "") for s in ans.get("steps", [])])

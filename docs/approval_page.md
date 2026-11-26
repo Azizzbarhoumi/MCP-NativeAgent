@@ -14,13 +14,13 @@ the exact command is quicker, and it's harder to approve the wrong step by mista
 
 One card per step the assistant prepared, newest last. The page refreshes every 4 seconds.
 - **Command** in large monospace, with its **risk tier** as a coloured badge: safe (green),
-  recoverable (amber), dangerous (red).
+  careful (amber), destructive (red).
 - **Explanation** in plain words: what the step does and why.
-- **Would lose** (dangerous steps only): a list of what goes away, plus "a backup is made
+- **Would lose** (destructive steps only): a list of what goes away, plus "a backup is made
   automatically before it runs".
 - **Meta line:** step id, repo, time prepared, and the approval code (for anyone who'd rather
   type it).
-- **Buttons:** Approve and Reject. A dangerous step also needs its confirmation phrase typed in
+- **Buttons:** Approve and Reject. A destructive step also needs its confirmation phrase typed in
   a box before Approve works.
 - After you approve, the card says "Approved: the assistant can run it now". The assistant runs
   it with `execute_step(step_id)`, once only.

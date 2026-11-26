@@ -4,9 +4,9 @@
 
 Allowed folders: env GIT_TOOL_ALLOWED_ROOTS (separated by ; on Windows, : elsewhere).
 Default: only eval/git_scenarios/build.
-Writes: prepare_step gives the plan line (tier, explanation, what a dangerous step would lose)
+Writes: prepare_step gives the plan line (tier, explanation, what a destructive step would lose)
 and a step id; execute_step runs it only with the user's approval code (plus the confirmation
-phrase for dangerous steps). There is no tool that runs raw commands.
+phrase for destructive steps). There is no tool that runs raw commands.
 
 Approval: the model never sees the approval token. prepare_step returns a step_id. The human
 gives the model the approval code that this process prints to stderr and logs/approvals.log
@@ -83,7 +83,7 @@ def list_operations() -> dict:
 @mcp.tool()
 def prepare_step(path: str, op: str, params: dict, task_id: str = "-") -> dict:
     """Validate one write step. Returns a step_id, the command, tier, explanation and (if
-    dangerous) what it would lose and the confirmation phrase the USER must type. Nothing runs
+    destructive) what it would lose and the confirmation phrase the USER must type. Nothing runs
     here. The user receives an approval code outside this conversation."""
     return ex.prepare_for_model(path, op, params, task_id)
 
@@ -99,7 +99,7 @@ def step_status(step_id: str) -> dict:
 def execute_step(step_id: str, approval_code: str | None = None, confirmation: str | None = None,
                  task_id: str = "-") -> dict:
     """Run ONE prepared step once the user approved it: either they clicked Approve on their
-    approval page (pass only step_id), or they typed you the approval code (and, for dangerous
+    approval page (pass only step_id), or they typed you the approval code (and, for destructive
     steps, the confirmation phrase). Works once, for the exact step and repo state it was
     prepared for. Returns the new state in plain words and how to undo."""
     return ex.execute_with_code(step_id, approval_code, confirmation, task_id)

@@ -196,7 +196,7 @@ def main() -> None:
                 BYPASS[sid](root / key.repo)
             res = check(sid, root, snap)
             inv = invariants(root, snap, scenario_dict(key), log, log_rows(ex, task_id))
-            dangerous = [s for s in log if s["tier"] == "dangerous" and s["result"] == "ok"]
+            dangerous = [s for s in log if s["tier"] == "destructive" and s["result"] == "ok"]
             row[variant] = {**res, "invariants": inv, "steps": log,
                             "dangerous_without_backup": sum(not s.get("backups") for s in dangerous)}
         row["bad_label"] = BAD[sid][0]

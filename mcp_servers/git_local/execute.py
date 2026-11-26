@@ -1,15 +1,16 @@
 """Typed git operations that change a repo, behind per-step approval.
 
 Flow for every step:
-  1. prepare(repo, op, params)  validates the arguments, rates the step, says what a dangerous
+  1. prepare(repo, op, params)  validates the arguments, rates the step, says what a destructive
      step would lose, and returns an approval token bound to (repo, op, exact params, HEAD).
   2. The user approves that one step. Dangerous steps also need the confirmation phrase.
   3. execute(token, repo, op, params, confirmation)  re-checks the binding (a changed command,
-     a reused token or a moved HEAD is refused), backs up before dangerous steps, runs git,
+     a reused token or a moved HEAD is refused), backs up before destructive steps, runs git,
      then reports the new state in plain words and how to undo.
 
-Tiers: safe = the read-only tools (no click), recoverable = needs approval, dangerous =
-approval + confirmation phrase + automatic backup, blocked = never runs.
+Tiers come from tiers.py (the one table the assistant's plan uses too): safe and careful steps
+need approval; destructive = approval + confirmation phrase + automatic backup; blocked = never
+runs. The approval page and the web UI ask for the code above the safe tier.
 There is no raw-command tool: the model can only pick an op and fill typed parameters.
 """
 
@@ -25,7 +26,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from mcp_servers.git_local import inspect_repo as ir
-from mcp_servers.git_local import safe_git
+from mcp_servers.git_local import safe_git, tiers
 from mcp_servers.git_local.safe_git import GitToolError
 
 LOG = Path(__file__).resolve().parents[2] / "logs" / "git_exec.jsonl"
@@ -121,109 +122,104 @@ def _oneline(repo: Path, *range_args: str) -> list[str]:
 # ------------------------------------------------------------ operations
 
 class Op:
-    def __init__(self, tier, explain, build, lose=None, backup=None, undo=None):
-        self.tier, self.explain, self.build = tier, explain, build
+    """How to run one typed step. Its risk tier is NOT here: it comes from tiers.py, the one
+    table the assistant's plan uses too."""
+    def __init__(self, explain, build, lose=None, backup=None, undo=None):
+        self.explain, self.build = explain, build
         self.lose, self.backup, self.undo = lose, backup, undo
 
 
-def _tier_switch(repo, p):
-    if _current_branch(repo) is None and _oneline(repo, "HEAD", "--not", "--branches", "--tags", "--remotes"):
-        return "dangerous"  # leaving a detached HEAD that has commits on no branch
-    return "recoverable"
-
-
 OPS: dict[str, Op] = {
-    "switch": Op(_tier_switch, "Move to another branch.",
+    "switch": Op("Move to another branch.",
                  lambda r, p: ["switch", "--end-of-options", _ref(r, p["branch"])],
                  lose=lambda r, p: _oneline(r, "HEAD", "--not", "--branches", "--tags", "--remotes"),
                  backup="head", undo=lambda r, p, before: f"git switch {before['branch'] or '--detach ' + before['head'][:12]}"),
-    "create_branch": Op("recoverable", "Create a branch at a commit (default: where you are). Nothing moves.",
+    "create_branch": Op("Create a branch at a commit (default: where you are). Nothing moves.",
                         lambda r, p: ["branch", "--end-of-options", _ref(r, p["name"]),
                                       *([_rev(r, p["start"])] if p.get("start") else [])],
                         undo=lambda r, p, b: f"git branch -d {p['name']}"),
-    "switch_create": Op("recoverable", "Create a branch where you are and move onto it. Saves detached commits.",
+    "switch_create": Op("Create a branch where you are and move onto it. Saves detached commits.",
                         lambda r, p: ["switch", "-c", _ref(r, p["name"])],
                         undo=lambda r, p, b: f"git switch {b['branch'] or '--detach ' + b['head'][:12]}  then  git branch -d {p['name']}"),
-    "add": Op("recoverable", "Stage files for the next commit.",
+    "add": Op("Stage files for the next commit.",
               lambda r, p: ["add", "--", *_paths(r, p["paths"])],
               undo=lambda r, p, b: "git restore --staged -- " + " ".join(p["paths"] if isinstance(p["paths"], list) else [p["paths"]])),
-    "rm_cached": Op("recoverable", "Stop tracking files. They stay on your disk.",
+    "rm_cached": Op("Stop tracking files. They stay on your disk.",
                     lambda r, p: ["rm", "--cached", "-r", "--", *_paths(r, p["paths"])],
                     undo=lambda r, p, b: "git add -- " + " ".join(p["paths"] if isinstance(p["paths"], list) else [p["paths"]])),
-    "restore_staged": Op("recoverable", "Unstage files. Your edits stay.",
+    "restore_staged": Op("Unstage files. Your edits stay.",
                          lambda r, p: ["restore", "--staged", "--", *_paths(r, p["paths"])],
                          undo=lambda r, p, b: "git add -- (same files)"),
-    "gitignore_add": Op("recoverable", "Add a pattern to .gitignore so git stops offering that file.",
+    "gitignore_add": Op("Add a pattern to .gitignore so git stops offering that file.",
                         None, undo=lambda r, p, b: f"remove the line {p['pattern']!r} from .gitignore"),
-    "resolve_conflict": Op("recoverable", "Settle a conflicted file by keeping one side ('ours' = your branch, "
+    "resolve_conflict": Op("Settle a conflicted file by keeping one side ('ours' = your branch, "
                            "'theirs' = the branch being merged). Stage it with add afterwards.",
                            lambda r, p: ["checkout", "--" + {"ours": "ours", "theirs": "theirs"}[p["side"]], "--",
                                          *_paths(r, p["path"])],
                            undo=lambda r, p, b: f"git checkout -m -- {p['path']}  (brings the conflict markers back)"),
-    "commit": Op("recoverable", "Record the staged changes as a commit.",
+    "commit": Op("Record the staged changes as a commit.",
                  lambda r, p: ["commit", "--no-verify", "-m", _message(p["message"])],
                  undo=lambda r, p, b: f"git reset --soft {b['head'][:12]}  (keeps the changes staged)"),
-    "merge_commit": Op("recoverable", "Finish a merge after all conflicts are resolved.",
+    "merge_commit": Op("Finish a merge after all conflicts are resolved.",
                        lambda r, p: ["commit", "--no-verify", "--no-edit"],
                        undo=lambda r, p, b: f"git reset --merge {b['head'][:12]}"),
-    "merge": Op("recoverable", "Bring another branch's commits into this one.",
+    "merge": Op("Bring another branch's commits into this one.",
                 lambda r, p: ["merge", "--no-edit", "--no-verify", "--end-of-options", _ref(r, p["branch"])],
                 undo=lambda r, p, b: f"git merge --abort (if it stopped on conflicts) or git reset --merge {b['head'][:12]}"),
-    "merge_abort": Op("recoverable", "Cancel the merge in progress and go back to before it.",
+    "merge_abort": Op("Cancel the merge in progress and go back to before it.",
                       lambda r, p: ["merge", "--abort"], undo=lambda r, p, b: "run the merge again"),
-    "rebase_abort": Op("recoverable", "Cancel the rebase in progress and put the branch back as it was.",
+    "rebase_abort": Op("Cancel the rebase in progress and put the branch back as it was.",
                        lambda r, p: ["rebase", "--abort"], undo=lambda r, p, b: "run the rebase again"),
-    "rebase_continue": Op("recoverable", "Go on with the rebase after the conflicts are resolved and staged.",
+    "rebase_continue": Op("Go on with the rebase after the conflicts are resolved and staged.",
                           lambda r, p: ["rebase", "--continue"],
                           undo=lambda r, p, b: f"git reset --keep ORIG_HEAD  (the branch before the rebase)"),
-    "revert": Op("recoverable", "Add a new commit that undoes an old one. History is kept, safe on shared branches.",
+    "revert": Op("Add a new commit that undoes an old one. History is kept, safe on shared branches.",
                  lambda r, p: ["revert", "--no-edit", _rev(r, p["rev"])],
                  undo=lambda r, p, b: f"git reset --keep {b['head'][:12]}  (only if not pushed yet)"),
-    "cherry_pick": Op("recoverable", "Copy one commit onto the current branch.",
+    "cherry_pick": Op("Copy one commit onto the current branch.",
                       lambda r, p: ["cherry-pick", _rev(r, p["rev"])],
                       undo=lambda r, p, b: f"git reset --keep {b['head'][:12]}"),
-    "reset_soft": Op("recoverable", "Move the branch back; the undone changes stay staged.",
+    "reset_soft": Op("Move the branch back; the undone changes stay staged.",
                      lambda r, p: ["reset", "--soft", _rev(r, p["rev"])],
                      undo=lambda r, p, b: f"git reset --soft {b['head'][:12]}"),
-    "amend": Op(lambda r, p: "dangerous" if _is_pushed(r) else "recoverable",
-                "Replace the last commit with the staged changes (and a new message).",
+    "amend": Op("Replace the last commit with the staged changes (and a new message).",
                 lambda r, p: ["commit", "--amend", "--no-verify", "-m", _message(p["message"])],
                 lose=lambda r, p: ["the current last commit is already on the remote; replacing it needs a force-push"]
                 if _is_pushed(r) else [], backup="head",
                 undo=lambda r, p, b: f"git reset --soft {b['head'][:12]}"),
-    "fetch": Op("recoverable", "Download new commits from the remote. Your branches don't move.",
+    "fetch": Op("Download new commits from the remote. Your branches don't move.",
                 lambda r, p: ["fetch", "--end-of-options", _remote(r, p["remote"])], undo=lambda r, p, b: "nothing to undo"),
-    "pull": Op("recoverable", "Download the remote branch and merge it into yours.",
+    "pull": Op("Download the remote branch and merge it into yours.",
                lambda r, p: ["pull", "--no-rebase", "--no-edit", "--end-of-options", _remote(r, p["remote"]), _ref(r, p["branch"])],
                undo=lambda r, p, b: f"git reset --merge {b['head'][:12]}"),
-    "push": Op("recoverable", "Publish your commits to the remote. Refused by git if the remote has commits you lack.",
+    "push": Op("Publish your commits to the remote. Refused by git if the remote has commits you lack.",
                lambda r, p: ["push", *(["--set-upstream"] if p.get("set_upstream") else []), "--no-verify",
                              "--end-of-options", _remote(r, p["remote"]), _ref(r, p["branch"])],
                undo=lambda r, p, b: "pushed commits are shared now; undo with git revert, not by rewriting"),
-    "stash": Op("recoverable", "Put uncommitted changes aside.", lambda r, p: ["stash", "push"],
+    "stash": Op("Put uncommitted changes aside.", lambda r, p: ["stash", "push"],
                 undo=lambda r, p, b: "git stash pop"),
-    "stash_pop": Op("recoverable", "Bring back the last stashed changes.", lambda r, p: ["stash", "pop"],
+    "stash_pop": Op("Bring back the last stashed changes.", lambda r, p: ["stash", "pop"],
                     undo=lambda r, p, b: "git stash  (puts them aside again)"),
-    # ---- dangerous
-    "reset_hard": Op("dangerous", "Move the branch to a commit and THROW AWAY all uncommitted changes.",
+    # ---- destructive (tier from tiers.py; these declare what they would lose and how to back up)
+    "reset_hard": Op("Move the branch to a commit and THROW AWAY all uncommitted changes.",
                      lambda r, p: ["reset", "--hard", _rev(r, p["rev"])],
                      lose=lambda r, p: _oneline(r, f"{_rev(r, p['rev'])}..HEAD") +
                      [f"uncommitted: {l}" for l in _git(r, "diff", "HEAD", "--stat", "--no-ext-diff").splitlines()[:-1]],
                      backup="head+worktree"),
-    "push_force": Op("dangerous", "Overwrite the remote branch with yours (--force-with-lease).",
+    "push_force": Op("Overwrite the remote branch with yours (--force-with-lease).",
                      lambda r, p: ["push", "--force-with-lease", "--no-verify", "--end-of-options",
                                    _remote(r, p["remote"]), _ref(r, p["branch"])],
                      lose=lambda r, p: [f"on the remote: {l}" for l in
                                         _oneline(r, f"HEAD..refs/remotes/{_remote(r, p['remote'])}/{_ref(r, p['branch'])}")],
                      backup="remote"),
-    "clean": Op("dangerous", "Delete untracked files and folders from disk (git has no copy of them).",
+    "clean": Op("Delete untracked files and folders from disk (git has no copy of them).",
                 lambda r, p: ["clean", "-f", "-d"],
                 lose=lambda r, p: _git(r, "clean", "-n", "-d").splitlines(), backup="untracked"),
-    "rebase": Op("dangerous", "Replay your commits on top of another branch. Rewrites their ids.",
+    "rebase": Op("Replay your commits on top of another branch. Rewrites their ids.",
                  lambda r, p: ["rebase", "--no-verify", "--end-of-options", _ref(r, p["onto"])],
                  lose=lambda r, p: [f"rewritten: {l}" for l in _oneline(r, f"{_ref(r, p['onto'])}..HEAD")],
                  backup="head"),
-    "delete_branch": Op("dangerous", "Delete a branch even if its commits are not merged anywhere.",
+    "delete_branch": Op("Delete a branch even if its commits are not merged anywhere.",
                         lambda r, p: ["branch", "-D", "--end-of-options", _ref(r, p["name"])],
                         lose=lambda r, p: _oneline(r, _ref(r, p["name"]), "--not",
                                                    *[b for b in _git(r, "for-each-ref", "--format=%(refname)", "refs/heads").split()
@@ -249,8 +245,8 @@ def _log(task_id: str, **fields) -> None:
         f.write(safe_git.redact(json.dumps(row, default=str)) + "\n")
 
 
-def _tier(op: Op, repo, params) -> str:
-    return op.tier(repo, params) if callable(op.tier) else op.tier
+def _tier(op: str, repo, params) -> str:
+    return tiers.decide(op, tiers.repo_facts(repo, op, params))[0]
 
 
 def _secret_files_staged_by(repo: Path, params: dict) -> list[str]:
@@ -298,8 +294,8 @@ def prepare(path: str, op: str, params: dict | None, task_id: str = "-") -> dict
             preview = f"append {pattern!r} to .gitignore"
         else:
             preview = "git " + " ".join(spec.build(repo, params))   # validates every argument
-        tier = _tier(spec, repo, params)
-        lose = (spec.lose(repo, params) if spec.lose else []) if tier == "dangerous" else []
+        tier = _tier(op, repo, params)
+        lose = (spec.lose(repo, params) if spec.lose else []) if tier == "destructive" else []
     except (KeyError, TypeError, ValueError, AttributeError) as e:
         # Missing or wrong-type parameter from the model (e.g. side="sideways"): refuse, never crash.
         err = f"blocked: invalid parameters for '{op}' ({type(e).__name__}: {str(e)[:80]})"
@@ -314,7 +310,7 @@ def prepare(path: str, op: str, params: dict | None, task_id: str = "-") -> dict
     token = f"{nonce}.{_sign(binding, nonce)}"
     entry = {"binding": binding, "expires": time.time() + TOKEN_TTL_S, "tier": tier}
     out = {"op": op, "command": preview, "tier": tier, "explain": spec.explain, "approval_token": token}
-    if tier == "dangerous":
+    if tier == "destructive":
         phrase = f"I accept the risk: {op}"
         entry["phrase"] = phrase
         out.update(would_lose=lose[:30] or ["nothing found to lose right now"], confirm_phrase=phrase,
@@ -403,11 +399,13 @@ def execute(token: str, path: str, op: str, params: dict | None, confirmation: s
         if binding != entry["binding"] or not hmac.compare_digest(sig, _sign(binding, nonce)):
             raise GitToolError("refused: this approval was for a different command or repo state; "
                                "prepare and approve the step again")
-        if entry["tier"] == "dangerous" and confirmation != entry["phrase"]:
-            raise GitToolError(f"refused: dangerous step needs the confirmation phrase: {entry['phrase']}")
+        if entry["tier"] == "destructive" and confirmation != entry["phrase"]:
+            raise GitToolError(f"refused: destructive step needs the confirmation phrase: {entry['phrase']}")
         spec = OPS[op]
         before = {"head": _head(repo), "branch": _current_branch(repo)}
-        backups = _make_backup(repo, spec.backup, op, params) if entry["tier"] == "dangerous" and spec.backup else []
+        # A backup before every step that rewrites or deletes: all destructive ones, and careful
+        # ones that declare one (a rebase of local-only commits).
+        backups = _make_backup(repo, spec.backup, op, params) if entry["tier"] != "safe" and spec.backup else []
         if op == "gitignore_add":
             gi = repo / ".gitignore"
             safe_git.check_file_arg(repo, ".gitignore")
@@ -452,7 +450,7 @@ def execute(token: str, path: str, op: str, params: dict | None, confirmation: s
 #   prepare_for_model  keeps the token here and gives the model only a step id. A random
 #                      approval code is shown to the HUMAN outside the model's context (stderr of
 #                      the server process and logs/approvals.log), like a 2FA code.
-#   execute_with_code  runs the step only with that code (and the phrase for dangerous steps).
+#   execute_with_code  runs the step only with that code (and the phrase for destructive steps).
 #                      Three wrong codes cancel the step.
 
 APPROVALS_LOG = LOG.with_name("approvals.log")
@@ -512,7 +510,7 @@ def approve_by_human(step_id: str, confirmation: str | None = None) -> dict:
         if st is None:
             return {"ok": False, "error": "unknown or finished step"}
         if st["phrase"] and confirmation != st["phrase"]:
-            return {"ok": False, "error": f"dangerous step: type exactly '{st['phrase']}' to approve"}
+            return {"ok": False, "error": f"destructive step: type exactly '{st['phrase']}' to approve"}
         st.update(approved=True, confirmation=confirmation if st["phrase"] else None)
     return {"ok": True}
 

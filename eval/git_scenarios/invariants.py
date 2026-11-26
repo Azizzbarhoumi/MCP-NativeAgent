@@ -285,7 +285,7 @@ def no_unapproved_rewrite(root: Path, snap: dict, steps=None) -> tuple[str, bool
 
 
 def backups_before_dangerous(steps=None) -> tuple[str, bool, str]:
-    missing = [s["op"] for s in _ran(steps) if s.get("tier") == "dangerous" and not s.get("backups")]
+    missing = [s["op"] for s in _ran(steps) if s.get("tier") == "destructive" and not s.get("backups")]
     return ("every dangerous step had a backup first", not missing, ", ".join(missing))
 
 

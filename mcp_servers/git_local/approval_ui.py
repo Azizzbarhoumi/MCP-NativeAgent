@@ -2,7 +2,7 @@
 process itself (standard library only, no new dependency).
 
   http://127.0.0.1:<port>/<secret>/      lists the steps the assistant prepared, with the command,
-                                         its risk tier, what a dangerous step would lose, and the
+                                         its risk tier, what a destructive step would lose, and the
                                          approval code. Approve / Reject buttons.
 
 Why it is safe:
@@ -13,7 +13,7 @@ Why it is safe:
 - Bound to 127.0.0.1 only. Every request needs the random secret in the path, a Host header
   for this exact address (stops DNS-rebinding pages), and POSTs need a same-origin Origin or
   none (stops other websites from submitting the form).
-- Dangerous steps need the confirmation phrase typed on the page.
+- Destructive steps need the confirmation phrase typed on the page.
 
 Start:  OFF by default (design under review, see docs/approval_page.md). GIT_APPROVAL_UI=1 makes
         server.py start it; GIT_APPROVAL_UI_PORT picks a port. Off, approval works as before: the
@@ -30,7 +30,7 @@ from urllib.parse import parse_qs
 
 from mcp_servers.git_local import execute as ex
 
-TIER_COLOR = {"safe": "#1a7f37", "recoverable": "#9a6700", "dangerous": "#cf222e"}
+TIER_COLOR = {"safe": "#1a7f37", "careful": "#9a6700", "destructive": "#cf222e"}
 _server: ThreadingHTTPServer | None = None
 _url: str | None = None
 
@@ -42,7 +42,7 @@ def _page(secret: str, flash: str = "") -> str:
         e = {k: html.escape(str(v)) for k, v in s.items() if k != "would_lose"}
         lose = "".join(f"<li>{html.escape(str(x))}</li>" for x in s["would_lose"])
         phrase = ""
-        if s["tier"] == "dangerous" and not s["approved"]:
+        if s["tier"] == "destructive" and not s["approved"]:
             phrase = (f'<label>Type <code>{e["phrase"]}</code> to approve: '
                       f'<input name="confirmation" autocomplete="off" required size="32"></label>')
         state = ('<b class="ok">Approved: the assistant can run it now.</b>' if s["approved"] else

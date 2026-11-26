@@ -96,7 +96,7 @@ def test_reject_cancels_the_step(repo, page):
 def test_dangerous_step_needs_the_phrase_typed_on_the_page(repo, page):
     (repo / "a.txt").write_text("edited\n")
     p = ex.prepare_for_model(str(repo), "reset_hard", {"rev": "HEAD"})
-    assert p["tier"] == "dangerous"
+    assert p["tier"] == "destructive"
     status, html = post(page + "approve", {"step_id": p["step_id"], "confirmation": "yes"})
     assert "type exactly" in html and ex.step_status(p["step_id"])["status"] == "pending"
     post(page + "approve", {"step_id": p["step_id"], "confirmation": p["confirm_phrase"]})
