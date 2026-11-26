@@ -172,3 +172,112 @@ tokens a minute (about 200k tokens a day).
   that refuses.
 
 **Next:** Phase 3, the end-to-end harness.
+
+### Phase 3: the end-to-end harness (code done; the assistant run is waiting on your PC)
+
+**What I did.** I added `eval/run_git_e2e.py`. For every scenario it builds a fresh repo, takes
+the snapshot, lets the assistant **diagnose** and propose steps, **translates** each step into a
+typed tool operation, **approves** it with a fixed policy, **executes** it through the real tool
+and then **grades** the result. I also added `git_assistant/translate.py`, which turns a proposed
+git command into a typed operation with no LLM involved.
+
+**The approval policy is held by the harness code, never by the model:**
+- Recoverable steps are approved.
+- Dangerous steps are approved with the confirmation phrase (or refused with `--dangerous refuse`).
+- Blocked steps are recorded and never run.
+
+**The grading** has three parts:
+1. The scenario's state check.
+2. The 8 invariants.
+3. **One** judge call that grades the diagnosis and the scenario's rubric together. This saves
+   Groq tokens: one call per scenario instead of two.
+
+**The report** gives the tuned and held-out sets in separate tables, with per-scenario pass/fail.
+Each failed run gets a one-line reason labelled `assistant`, `grader` or `harness/tool`. It also
+includes:
+- **Risk-tier correctness:** the planner's rating of each step (`risk.py`, from the command text)
+  compared with the tool's tier (`execute.py`, from the real repo state). An "under-rated" step is
+  one the plan called safe but the tool called dangerous.
+- **Cost:** tokens per scenario plus a list-price $ estimate. The free tiers cost $0.
+- Latency, and the number of dangerous steps run and how many of them ran without a backup.
+
+**Why, in plain words.** Until now the benchmark only *read* the plan and asked a judge whether
+it sounded right. Now the plan really runs and the repo itself is checked afterwards, so "sounds
+right but leaves the repo broken" is caught. The translator is deterministic, so a failure is
+never hidden by an LLM rewording the plan. Commands the tool does not offer are recorded as
+`unsupported` and never run. Some are left out on purpose, for example discarding edits with
+`checkout --`. Others are simply missing, for example `branch -f`.
+
+**An oracle mode was added too** (`--oracle`). It uses the answer key's first fix as the plan,
+with no LLM, which tests the harness and shows the ceiling.
+
+**Test results.**
+- `tests/test_translate.py`: 47 tests (36 command shapes, and 8 scenarios run end to end with the
+  oracle plan).
+- **Oracle run: 23/25 pass.** The 2 failures are answer-key wording, not tool bugs:
+  - "git cherry-pick <that commit>" is a placeholder.
+  - "edit both files" names no file.
+- **The real assistant run has not happened yet.** It needs your API keys and Qdrant, so it is
+  queued on your PC after the Phase 5 runs.
+
+**Files:** `eval/run_git_e2e.py`, `git_assistant/translate.py`, `tests/test_translate.py`,
+`common/llm.py` (a per-call usage record for cost) and `eval/git_scenarios/rubric.py` (it accepts
+verdicts from the combined judge call).
+
+### Phase 4: security hardening (4 real holes found and fixed)
+
+**What I did.** The security tests grew from 32 to **104**, all passing. Each new test tries an
+attack and expects a refusal:
+- Shell syntax in branch names and commit messages. There is no shell, so it stays text.
+- Bad `.gitignore` patterns.
+- Windows and macOS path spellings.
+- `--upload-pack`, `--receive-pack`, `--exec`, `--output` and `-c core.sshCommand`, in every
+  parameter and at the last line of defense.
+- More hostile config keys.
+- The `ext::` and `ssh://-oProxyCommand` remote URLs.
+- 12 local hook types across 12 operations.
+- Wrong or reused confirmation phrases, expired tokens, a token used on another repo, a step that
+  turns dangerous after it was approved, and malformed parameters.
+- Secret redaction in diffs, logs, commit messages and the tool log.
+
+**Holes found and fixed:**
+1. **The model could approve its own steps.** The MCP server's `prepare_step` returned the approval
+   token and the confirmation phrase to the model, and `execute_step` accepted them. Now
+   `prepare_step` returns only a `step_id`. A random 6-character **approval code goes to the
+   human outside the model's context** (the server's stderr and `logs/approvals.log`, like a 2FA
+   code). `execute_step` needs that code, and 3 wrong codes cancel the step. In-process agent
+   code, such as the benchmark, still holds the token itself.
+2. **A local remote's hooks ran on push.** When the remote is a folder on the same machine, git
+   runs *that* repo's `pre-receive`, `update`, `post-receive` and `reference-transaction` hooks,
+   and drops our `-c core.hooksPath` override for local transports. The new test proved 5 hook
+   files ran. Now fetch, pull and push refuse a local remote unless it is inside the allowed
+   folders, has a clean config and has no hook files (only `*.sample`).
+3. **`.git` could be reached by other spellings.** `.GIT/config` on Windows and macOS (file names
+   ignore case there), `.git./config` and `.git /config` (Windows drops trailing dots and spaces)
+   and `GIT~1/config` (the Windows short name) all got past the check, and so did `app.py:stream`
+   (NTFS streams). The path check now normalises backslashes and refuses every spelling of
+   `.git`, drive letters, `~` and `:`.
+4. **Secrets were shown to the model.** `git_diff`, `git_log`, `git_show` and `git_reflog` returned
+   raw text, so the diff of a `.env` showed the key. Everything returned or logged now goes
+   through `safe_git.redact`: tokens, `user:pass@` in URLs, `KEY=value` lines and private-key
+   blocks. Code like `os.environ["TOKEN"]` is left alone.
+
+**Smaller fixes:**
+- Malformed parameters, such as `side="sideways"` or a missing branch, crashed `prepare` with a
+  KeyError. They are now refused.
+- `https://TOKEN@host` (a token with no `:`) was not seen as a credential. It is now, while
+  `ssh://git@host` stays fine.
+- `safe_git.run` refuses any global option before the subcommand (`-c`, `-C`, `--exec-path`).
+- New overrides: `submodule.recurse=false`, `fetch.recurseSubmodules=false` and
+  `protocol.file.allow=user`.
+- More hostile keys are refused: `core.alternateRefsCommand`, `trailer.*`, `submodule.*`,
+  `mergetool.*` and `difftool.*`.
+
+**Files:** `mcp_servers/git_local/safe_git.py`, `execute.py`, `inspect_repo.py`, `server.py` and
+`tests/test_git_exec_security.py`.
+
+**Test results:** the full suite has **233 passed**. The oracle end-to-end run still passes 23/25,
+so the new checks don't break the scenarios.
+
+**Decision for you (morning).** The approval code is shown on the MCP server's stderr and in
+`logs/approvals.log`. When you wire the Action agent, a UI button should replace that.

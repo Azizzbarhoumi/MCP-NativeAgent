@@ -5,12 +5,13 @@
 Allowed folders: env GIT_TOOL_ALLOWED_ROOTS (separated by ; on Windows, : elsewhere).
 Default: only eval/git_scenarios/build.
 Writes: prepare_step gives the plan line (tier, explanation, what a dangerous step would lose)
-and an approval token bound to that exact step; execute_step runs it only with that token
-(plus the confirmation phrase for dangerous steps). There is no tool that runs raw commands.
+and a step id; execute_step runs it only with the user's approval code (plus the confirmation
+phrase for dangerous steps). There is no tool that runs raw commands.
 
-Important for wiring: the token binds the step, it does not prove a human approved it.
-The agent code (not the LLM) must keep the token, show the step to the user, and call
-execute_step only after the user's click. Never put the token in the model's context.
+Approval: the model never sees the approval token. prepare_step returns a step_id; the
+approval code goes to the human outside the model's context (this process's stderr and
+logs/approvals.log); execute_step needs that code. In-process agent code can still use
+execute.prepare/execute directly and hold the token itself.
 """
 
 try:  # mcp 2.x renamed FastMCP to MCPServer; support both so the venv version doesn't matter
@@ -78,17 +79,18 @@ def list_operations() -> dict:
 
 @mcp.tool()
 def prepare_step(path: str, op: str, params: dict, task_id: str = "-") -> dict:
-    """Validate one write step and get its approval token. Show the user the command, tier,
-    explanation and (if dangerous) would_lose + confirm_phrase. Nothing runs here."""
-    return ex.prepare(path, op, params, task_id)
+    """Validate one write step. Returns a step_id, the command, tier, explanation and (if
+    dangerous) what it would lose and the confirmation phrase the USER must type. Nothing runs
+    here. The user receives an approval code outside this conversation."""
+    return ex.prepare_for_model(path, op, params, task_id)
 
 
 @mcp.tool()
-def execute_step(approval_token: str, path: str, op: str, params: dict,
-                 confirmation: str | None = None, task_id: str = "-") -> dict:
-    """Run ONE step the user approved. The token only works for the exact same op, params
-    and repo state, once. Returns the new state in plain words and how to undo."""
-    return ex.execute(approval_token, path, op, params, confirmation, task_id)
+def execute_step(step_id: str, approval_code: str, confirmation: str | None = None, task_id: str = "-") -> dict:
+    """Run ONE prepared step, only with the approval code the user typed (and, for dangerous
+    steps, the confirmation phrase the user typed). Works once, for the exact step and repo
+    state it was prepared for. Returns the new state in plain words and how to undo."""
+    return ex.execute_with_code(step_id, approval_code, confirmation, task_id)
 
 
 if __name__ == "__main__":

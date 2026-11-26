@@ -33,7 +33,27 @@ HOSTILE_KEY = re.compile(
     r"|include\.|includeif\.|filter\.|alias\.|credential|gpg\.|sequence\.editor"
     r"|diff\.[^.]+\.(textconv|command)|merge\.[^.]+\.driver"
     r"|remote\.[^.]+\.(uploadpack|receivepack|proxy|vcs)|uploadpack\.|receive\."
-    r"|http\.|url\.)", re.I)
+    r"|http\.|url\.|core\.alternaterefscommand|mergetool\.|difftool\.|trailer\.|submodule\.)", re.I)
+
+# Secrets in text the tool returns or logs (diffs, commit messages, git errors): replaced by ***.
+SECRET_PATTERNS = [
+    re.compile(r"(gh[pousr]_)\w{16,}|(github_pat_)\w{16,}|(glpat-)[\w-]{16,}|(AKIA)[0-9A-Z]{16}"),
+    re.compile(r"(://)[^/\s:@]+:[^/\s@]+@"),                                   # https://user:pass@host
+    re.compile(r"(?m)^([+\- ]?\s*(?:export\s+)?[A-Za-z0-9_]*(?:API_?KEY|TOKEN|SECRET|PASSWORD|PASSWD)[A-Za-z0-9_]*\s*[=:]\s*)"
+               r"(?![\s\"']*$)(?!.*os\.environ)[^\n]+", re.I),                           # KEY=value lines (diffs, .env)
+    re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(-----END [A-Z ]*PRIVATE KEY-----|$)"),
+]
+
+
+def redact(text: str) -> str:
+    """Hide tokens, passwords in URLs, KEY=value secrets and private keys in any text."""
+    if not text:
+        return text
+    text = SECRET_PATTERNS[0].sub(lambda m: next(g for g in m.groups() if g) + "***", text)
+    text = SECRET_PATTERNS[1].sub(r"\1***@", text)
+    text = SECRET_PATTERNS[2].sub(lambda m: m.group(1) + "***", text)
+    text = SECRET_PATTERNS[3].sub("-----BEGIN PRIVATE KEY----- *** (redacted)", text)
+    return text
 
 ENV_KEEP = ("PATH", "SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT", "TEMP", "TMP", "TMPDIR")
 
@@ -58,6 +78,8 @@ def overrides() -> list[str]:
         "core.editor": "true", "sequence.editor": "true", "core.askPass": "",
         "credential.helper": "", "diff.external": "", "commit.gpgSign": "false",
         "tag.gpgSign": "false", "protocol.ext.allow": "never", "core.symlinks": "false",
+        "submodule.recurse": "false", "fetch.recurseSubmodules": "false",   # no surprise fetches of other URLs
+        "protocol.file.allow": "user",
     }
     out = []
     for k, v in pairs.items():
@@ -147,17 +169,29 @@ def check_repo(path: str) -> Path:
     return root
 
 
+def _is_git_dir_name(part: str) -> bool:
+    """'.git' in every spelling that reaches the real .git folder on Windows or macOS:
+    '.GIT' (case-insensitive file systems), '.git.' / '.git ' (Windows drops trailing dots and
+    spaces) and 'GIT~1' (the Windows 8.3 short name)."""
+    p = part.lower().rstrip(". ")
+    return p == ".git" or re.fullmatch(r"git~\d+", p) is not None
+
+
 def check_file_arg(repo: Path, rel: str) -> str:
-    """A path argument inside the repo: relative, no '..', no leading '-', no symlinks."""
-    if not rel or rel.startswith("-") or "\0" in rel or Path(rel).is_absolute() or ".." in Path(rel).parts:
+    """A path argument inside the repo: relative, no '..', no leading '-', no symlinks, nothing
+    inside .git (in any spelling), no Windows drive, UNC path or ':' stream."""
+    if not isinstance(rel, str) or not rel or "\0" in rel:
         raise GitToolError(f"refused path argument: {rel!r}")
-    target = repo / rel
+    norm = rel.replace("\\", "/")              # a backslash is a separator on Windows
+    if norm.startswith(("-", "/", "~")) or ":" in norm or Path(norm).is_absolute() or ".." in Path(norm).parts:
+        raise GitToolError(f"refused path argument: {rel!r}")
+    if any(_is_git_dir_name(part) for part in Path(norm).parts):
+        raise GitToolError("refused: paths inside .git")
+    target = repo / norm
     _no_symlinks(repo, target)
     if not target.resolve().is_relative_to(repo):
         raise GitToolError(f"refused path argument: {rel!r}")
-    if Path(rel).parts[0] == ".git":
-        raise GitToolError("refused: paths inside .git")
-    return Path(rel).as_posix()
+    return Path(norm).as_posix()
 
 
 # ------------------------------------------------------------------ run
@@ -169,6 +203,9 @@ DENY_OPTIONS = ("--exec", "--upload-pack", "--receive-pack", "--config-env", "--
 def run(repo: Path, args: list[str], read_only: bool, ok_codes=(0,)) -> subprocess.CompletedProcess:
     """args are built by our own code, never by the model; this is a last line of defense."""
     before_sep = args[:args.index("--")] if "--" in args else args
+    if not args or args[0].startswith("-"):
+        # Global options (-c key=value, -C dir, --exec-path...) would come AFTER our overrides and win.
+        raise GitToolError("refused: global git options are not allowed")
     if any(a.startswith(DENY_OPTIONS) for a in before_sep) or (args[0] == "rebase" and "-x" in before_sep):
         raise GitToolError("refused option")
     try:
@@ -181,3 +218,38 @@ def run(repo: Path, args: list[str], read_only: bool, ok_codes=(0,)) -> subproce
     if p.returncode not in ok_codes:
         raise GitToolError((p.stderr or p.stdout).strip()[:2000] or f"git {args[0]} failed ({p.returncode})")
     return p
+
+
+# ------------------------------------------------------------------ local remotes
+
+def local_remote_path(repo: Path, url: str) -> Path | None:
+    """The folder a remote URL points to when it is on this machine (a path or file://), else None."""
+    if url.startswith("file://"):
+        return Path(url[len("file://"):])
+    if re.match(r"^[A-Za-z]:[\\/]", url) or url.startswith(("/", "./", "../", "\\\\")) or (
+            "://" not in url and ":" not in url):
+        return (repo / url) if not Path(url).is_absolute() else Path(url)
+    return None                                  # https://, ssh://, git@host:path
+
+
+def check_local_remote(repo: Path, url: str) -> None:
+    """Pushing to a repo on this machine runs THAT repo's hooks (pre-receive, update, post-receive...)
+    as you, and git does not pass our -c overrides to it. So a local remote must be inside the
+    allowed folders, have a clean config, and have no hook files (only *.sample)."""
+    path = local_remote_path(repo, url)
+    if path is None:
+        return
+    folder = check_folder(str(path))
+    git_dir = folder if (folder / "HEAD").is_file() and (folder / "objects").is_dir() else folder / ".git"
+    cfg = git_dir / "config"
+    if cfg.exists():
+        p = subprocess.run(["git", "config", "--file", str(cfg), "--no-includes", "--name-only", "--list"],
+                           env=clean_env(True), capture_output=True, text=True, timeout=TIMEOUT_S)
+        bad = sorted({k for k in p.stdout.split() if HOSTILE_KEY.match(k)})
+        if bad:
+            raise GitToolError(f"refused: the local remote's config sets keys that can run programs ({', '.join(bad)})")
+    hooks = git_dir / "hooks"
+    active = sorted(h.name for h in hooks.iterdir() if h.is_file() and not h.name.endswith(".sample")) if hooks.is_dir() else []
+    if active:
+        raise GitToolError("refused: the local remote has hooks that would run on your computer when you push "
+                           f"({', '.join(active)}). Inspect them by hand first.")

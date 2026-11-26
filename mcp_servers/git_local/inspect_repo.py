@@ -129,7 +129,7 @@ def log(path: str, n: int = 15, all_branches: bool = True) -> str:
     root = check_path(path)
     n = max(1, min(int(n), 50))
     args = ["log", "--oneline", "--decorate", "--graph", f"-n{n}"] + (["--all"] if all_branches else [])
-    return _git(root, *args, ok_codes=(0, 128))[:MAX_TEXT]
+    return safe_git.redact(_git(root, *args, ok_codes=(0, 128)))[:MAX_TEXT]
 
 
 def diff(path: str, staged: bool = False, file: str | None = None) -> str:
@@ -137,17 +137,17 @@ def diff(path: str, staged: bool = False, file: str | None = None) -> str:
     args = ["diff", "--no-ext-diff", "--no-textconv", "--stat", "--patch"] + (["--cached"] if staged else [])
     if file:
         args += ["--", safe_git.check_file_arg(root, file)]
-    return _git(root, *args)[:MAX_TEXT]
+    return safe_git.redact(_git(root, *args))[:MAX_TEXT]
 
 
 def reflog(path: str, n: int = 15) -> str:
     """Where HEAD has been: the safety net for 'I lost my commit'."""
     root = check_path(path)
-    return _git(root, "reflog", f"-n{max(1, min(int(n), 50))}", ok_codes=(0, 128))[:MAX_TEXT]
+    return safe_git.redact(_git(root, "reflog", f"-n{max(1, min(int(n), 50))}", ok_codes=(0, 128)))[:MAX_TEXT]
 
 
 def show_commit(path: str, rev: str = "HEAD") -> str:
     root = check_path(path)
     if not re.fullmatch(r"[\w./~^@{}-]{1,80}", rev) or rev.startswith("-"):
         raise GitToolError("invalid revision")
-    return _git(root, "show", "--no-ext-diff", "--no-textconv", "--stat", rev)[:MAX_TEXT]
+    return safe_git.redact(_git(root, "show", "--no-ext-diff", "--no-textconv", "--stat", rev))[:MAX_TEXT]

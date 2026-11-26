@@ -67,9 +67,11 @@ def _remote(repo: Path, name: str) -> str:
     if name not in remotes:
         raise GitToolError(f"no remote named {name}")
     url = safe_git.run(repo, ["remote", "get-url", "--push", name], read_only=True).stdout.strip()
-    if CREDENTIAL.search(url):
+    # https://TOKEN@host has no ':' but is still a credential; ssh://git@host is a normal user name.
+    if CREDENTIAL.search(url) or re.match(r"(?i)https?://[^/\s]+@", url):
         raise GitToolError("blocked: this remote URL contains a credential. Remove it from the URL "
                            "and use a credential manager or SSH key instead (explained, not fixed).")
+    safe_git.check_local_remote(repo, url)     # a remote on this machine must not run hooks on push
     return name
 
 
@@ -243,7 +245,7 @@ def _log(task_id: str, **fields) -> None:
     LOG.parent.mkdir(parents=True, exist_ok=True)
     row = {"ts": datetime.now(timezone.utc).isoformat(timespec="seconds"), "task_id": task_id, **fields}
     with LOG.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(row, default=str) + "\n")
+        f.write(safe_git.redact(json.dumps(row, default=str)) + "\n")
 
 
 def _tier(op: Op, repo, params) -> str:
@@ -297,9 +299,14 @@ def prepare(path: str, op: str, params: dict | None, task_id: str = "-") -> dict
             preview = "git " + " ".join(spec.build(repo, params))   # validates every argument
         tier = _tier(spec, repo, params)
         lose = (spec.lose(repo, params) if spec.lose else []) if tier == "dangerous" else []
+    except (KeyError, TypeError, ValueError, AttributeError) as e:
+        # Missing or wrong-type parameter from the model (e.g. side="sideways"): refuse, never crash.
+        err = f"blocked: invalid parameters for '{op}' ({type(e).__name__}: {str(e)[:80]})"
+        _log(task_id, op=op, params=_redacted(params), tier="blocked", outcome="refused", error=safe_git.redact(err))
+        return {"op": op, "tier": "blocked", "explain": safe_git.redact(err)}
     except GitToolError as e:
-        _log(task_id, op=op, params=_redacted(params), tier="blocked", outcome="refused", error=str(e))
-        return {"op": op, "tier": "blocked", "explain": str(e)}
+        _log(task_id, op=op, params=_redacted(params), tier="blocked", outcome="refused", error=safe_git.redact(str(e)))
+        return {"op": op, "tier": "blocked", "explain": safe_git.redact(str(e))}
 
     binding = _binding(repo, op, params)
     nonce = secrets.token_hex(8)
@@ -317,7 +324,7 @@ def prepare(path: str, op: str, params: dict | None, task_id: str = "-") -> dict
 
 
 def _redacted(params: dict) -> dict:
-    return json.loads(CREDENTIAL.sub("***", json.dumps(params)))
+    return json.loads(safe_git.redact(CREDENTIAL.sub("***", json.dumps(params))))
 
 
 def _make_backup(repo: Path, kind: str, op: str, params: dict) -> list[str]:
@@ -410,15 +417,18 @@ def execute(token: str, path: str, op: str, params: dict | None, confirmation: s
             out_text = ""
         else:
             p = safe_git.run(repo, spec.build(repo, params), read_only=False, ok_codes=(0, 1))
-            out_text = (p.stdout + p.stderr).strip()
+            out_text = safe_git.redact((p.stdout + p.stderr).strip())
             if p.returncode:
                 state = ir.repo_state(str(repo))
                 _log(task_id, op=op, params=_redacted(params), tier=entry["tier"], outcome="git_failed", error=out_text[:300])
                 return {"ok": False, "op": op, "output": out_text[-1500:], "state": _plain_state(state),
                         "undo": spec.undo(repo, params, before) if spec.undo else None, "backups": backups}
+    except (KeyError, TypeError, ValueError, AttributeError) as e:
+        _log(task_id, op=op, params=_redacted(params), outcome="refused", error=f"invalid parameters: {type(e).__name__}")
+        return {"ok": False, "op": op, "refused": f"refused: invalid parameters for '{op}'"}
     except GitToolError as e:
-        _log(task_id, op=op, params=_redacted(params), outcome="refused", error=str(e))
-        return {"ok": False, "op": op, "refused": str(e)}
+        _log(task_id, op=op, params=_redacted(params), outcome="refused", error=safe_git.redact(str(e)))
+        return {"ok": False, "op": op, "refused": safe_git.redact(str(e))}
 
     state = ir.repo_state(str(repo))
     undo = [f"git reset --hard {b}" for b in backups if b.endswith("/head")]
@@ -431,3 +441,61 @@ def execute(token: str, path: str, op: str, params: dict | None, confirmation: s
             "head_before": before["head"][:12], "head_after": _head(repo)[:12],
             "undo": undo, "backups": backups,
             "log": ir.log(str(repo), 5, all_branches=False)}
+
+
+# ------------------------------------------------------------ approval for the MCP server
+#
+# prepare() returns the token to its caller. That is right for agent code running in-process
+# (the benchmark, a UI), and WRONG for the MCP server: there the caller is the model, which could
+# then approve its own step. So the server uses the two functions below instead:
+#   prepare_for_model  keeps the token here and gives the model only a step id. A random
+#                      approval code is shown to the HUMAN outside the model's context (stderr of
+#                      the server process and logs/approvals.log), like a 2FA code.
+#   execute_with_code  runs the step only with that code (and the phrase for dangerous steps).
+#                      Three wrong codes cancel the step.
+
+APPROVALS_LOG = LOG.with_name("approvals.log")
+_STEPS: dict[str, dict] = {}
+MAX_CODE_ATTEMPTS = 3
+
+
+def _show_code_to_human(step_id: str, command: str, tier: str, code: str) -> None:
+    import sys
+    line = f"[git-local] approve step {step_id} ({tier}): {command}  ->  approval code: {code}"
+    print(line, file=sys.stderr, flush=True)
+    APPROVALS_LOG.parent.mkdir(parents=True, exist_ok=True)
+    with APPROVALS_LOG.open("a", encoding="utf-8") as f:
+        f.write(datetime.now(timezone.utc).isoformat(timespec="seconds") + " " + safe_git.redact(line) + "\n")
+
+
+def prepare_for_model(path: str, op: str, params: dict | None, task_id: str = "-") -> dict:
+    p = prepare(path, op, params, task_id)
+    if p["tier"] == "blocked":
+        return p
+    step_id = secrets.token_hex(4)
+    code = "".join(secrets.choice("ABCDEFGHJKLMNPQRSTUVWXYZ23456789") for _ in range(6))
+    _STEPS[step_id] = {"token": p.pop("approval_token"), "code_hash": hashlib.sha256(code.encode()).hexdigest(),
+                       "path": path, "op": op, "params": dict(params or {}), "attempts": 0,
+                       "phrase": p.get("confirm_phrase")}
+    _show_code_to_human(step_id, p["command"], p["tier"], code)
+    p.update(step_id=step_id, approval="Show this step to the user. They will see an approval code in the "
+                                       "git-local approval window/log and type it to you if they agree.")
+    return p
+
+
+def execute_with_code(step_id: str, approval_code: str, confirmation: str | None = None, task_id: str = "-") -> dict:
+    step = _STEPS.get(step_id)
+    if step is None:
+        return {"ok": False, "refused": "refused: unknown, used or cancelled step id; prepare it again"}
+    good = hmac.compare_digest(hashlib.sha256(str(approval_code or "").encode()).hexdigest(), step["code_hash"])
+    if not good:
+        step["attempts"] += 1
+        if step["attempts"] >= MAX_CODE_ATTEMPTS:
+            _STEPS.pop(step_id, None)
+            _PENDING.pop(step["token"], None)
+            _log(task_id, op=step["op"], outcome="refused", error="approval code wrong 3 times; step cancelled")
+            return {"ok": False, "refused": "refused: wrong approval code 3 times; the step is cancelled"}
+        _log(task_id, op=step["op"], outcome="refused", error="wrong approval code")
+        return {"ok": False, "refused": "refused: wrong approval code (only the user has it)"}
+    _STEPS.pop(step_id, None)
+    return execute(step["token"], step["path"], step["op"], step["params"], confirmation, task_id)
