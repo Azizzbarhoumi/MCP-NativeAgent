@@ -2,7 +2,54 @@
 
 Branch: `overnight/2026-11-26` (never main). Every commit is authored by Aziz only, with no AI lines.
 
-<!-- SUMMARY GOES HERE AT THE END -->
+## Morning summary (06:50 Tunis)
+
+**Branch:** `overnight/2026-11-26`, 12 small commits, all authored by you with no AI lines.
+`main` was not touched.
+
+**Tests:** **248 passed, 11 skipped** (the skips need your PC's Qdrant). That was 85 at the start
+of the night.
+
+### Done
+| phase | result |
+|---|---|
+| 1. Invariants | 8 checks after every scenario run: no data loss, no shared rewrite, no unapproved reset or force-push, backups before dangerous steps, no leaked secret, `git fsck`, expected branch and tree, nothing else changed. 16 tests. |
+| 2. Scenarios | **25 broken-repo scenarios** (19 tuned and 6 held-out). They cover merge and rebase conflicts, rejected push, detached HEAD, wrong commit and wrong branch, committed or pushed secrets, 3 auth errors, `git add .` of big files, a bad rebase and 3 CI failures. Each has a state check, a rubric and a known-good fix plus a beginner mistake that must be caught. Reference fixes: 22/22 state checks pass, all 8 invariants kept for all 25. Eval data is kept out of the knowledge base (tested). |
+| 3. E2E harness | diagnose → translate → approve → execute → state check + invariants + judge. One JSON + markdown table with pass/fail, risk-tier agreement and cost. Oracle run (no LLM): **23/25**. The 2 misses are answer-key wording. |
+| 4. Security | 72 new attack tests (32 → 104). **4 real holes fixed:** the model could approve its own steps; a local remote's hooks ran on push; `.git` could be reached by other spellings (`.GIT`, `.git.`, `GIT~1`); and diffs and logs showed secrets. |
+| 6. git_docs | Retrieval test with 10 beginner questions, plus source and eval-isolation checks. The live part is queued on your PC. |
+| 7. Graph viewer | New **troubleshooting chains** view: repo state → error → cause → command (with its risk tier from `risk.py`) → concept → doc section. 11 errors, all 37 doc links resolve. Screenshots are in `docs/screenshots/`. No Neo4j. |
+
+### Not done, or half done
+- **Phase 5 (decomposition):** A is done, B is still running.
+  - **A = 87% correct**, with 2 wrong answers delivered (gpt-oss-20b answering).
+  - B has been stuck in Groq rate-limit waits since 01:17, because gpt-oss-20b's daily tokens are
+    used up. It will finish on its own.
+  - **No keep/drop decision yet:** one pair can't beat the noise.
+- **Phase 3, real assistant run:** queued on your PC behind Phase 5, not started.
+- **Phase 8, 3× benchmark:** not possible on today's API budget. The deterministic parts ran in
+  full, and the commands plus the averaging script are ready.
+- **Live retrieval test on your PC:** queued after the e2e run.
+
+### Failures and honest notes
+- **Mistral returns 402** (no budget on the key), so tonight's answer model was Groq gpt-oss-20b.
+  The 87% is **not** comparable to the earlier 77% (Mistral).
+- Your PC went offline from 02:30 to 06:37 (it probably slept). The runs resumed when it came back.
+- A bug was found and fixed: gpt-oss citations `【1】` weren't recognised.
+- The oracle e2e is 23/25, not 25/25, because of 2 answer-key wordings. I didn't "fix" them by
+  tuning the harness to those scenarios.
+
+### Decisions for you
+1. **Answer model:** add budget to Mistral, keep Groq gpt-oss-20b (87% on A, but 200k tokens a
+   day on the free tier), or pay for Groq's dev tier. Without one of these, Phase 8 can't run 3×.
+2. **Approval code UI:** the human approval code currently goes to the MCP server's stderr and
+   `logs/approvals.log`. It should become a button in the UI.
+3. **Playbook in the knowledge base?** `knowledge/playbooks/git_errors.yaml` feeds only the viewer
+   for now.
+4. **Decomposition:** decide after B finishes (and ideally a second pair).
+5. **Merging** `overnight/2026-11-26` into `main`: your call after you've read this.
+6. Reminder: Pro Git is CC BY-NC-SA, so remove it before any commercial use.
+
 
 ## Log, task by task
 
@@ -369,3 +416,73 @@ tests, which need your PC's Qdrant.
 **Decision for you (morning).** Should the playbook also go into the knowledge base, so the
 assistant can cite it? I didn't do that. It is my own writing rather than a licensed doc, and
 indexing it would change the knowledge benchmark.
+
+### Phase 5: query decomposition (half measured; the second run is still crawling)
+
+**Setup on your PC:**
+- Ollama is not installed. The GPU is an RTX 3050 with 4 GB, and C: has 11 GB free, too little
+  to pull an 8B model.
+- So the answer model is **Groq `gpt-oss-20b`** for both A and B, set for the process only.
+- The judge is Groq `gpt-oss-120b`, same as before.
+- Both runs use the same code (commit b525ebc) and the same 31 questions.
+- A = `--mode baseline --prompt v2 --check`. B = A + `--decompose`.
+
+**A, run 1: done in 17.5 minutes** (`knowledge_baseline_v2_check_20261126_011629`):
+
+| type | n | retrieval hit | full coverage | correct |
+|---|---|---|---|---|
+| lookup | 12 | 100% | 100% | 100% |
+| exact_match | 11 | 100% | 100% | 91% |
+| multi_hop | 8 | 88% | 75% | 62% |
+| **all** | 31 | 97% | 94% | **87%** |
+
+- Checker: it retried 4 of the 31 answers and refused 1; 3 were correct after the retry.
+- Wrong answers delivered: **2/31**.
+
+**B, run 1: not finished.** It started at 01:17 Tunis time and has been in Groq 429 waits of about
+10 minutes each since then.
+- A used about 4,600 tokens per question on gpt-oss-20b, which is roughly 143k of its ~200k daily
+  tokens. Then the checker and the decomposer also run on gpt-oss-20b.
+- So B is running against the **daily** token limit. It is alive and I'm letting it finish, so
+  A vs B stays fair, but the second pair (A2/B2) can't run today.
+
+**What the A number means.** 87% is the best score so far, but it is **not** directly comparable
+to the earlier 77% (v2 + checker). That 77% used Mistral as the answer model, and this used
+gpt-oss-20b. It does say that gpt-oss-20b is a strong answer model for this pipeline, especially
+on multi-hop questions (62% here vs 25% for Mistral with v2).
+
+**Decision on decomposition: not made yet.** It stays off by default (unchanged) until B finishes
+and, ideally, a second pair confirms it. One pair can't separate a real gain from the 1–2 question
+noise.
+
+**A bug the smoke test found, now fixed.** gpt-oss cites passages as `【1】`, not `[1]`, so every
+answer showed "Citations: (none)". `knowledge/answer.py` now reads `[1]`, `[1, 3]`, `【1】` and
+`【1†L3】`. I added `tests/test_citations.py` (4 tests). The fix changes only the recorded
+`cited` list, not grading. It is on the branch **after** b525ebc, so tonight's A and B runs share
+the same code.
+
+### Phase 8: final benchmark (not run as asked: the free API budget doesn't allow it)
+
+**What was asked:** run the whole suite 3 times and average. **What happened:**
+- **The deterministic parts were run fully.** These are pytest (**248 passed, 11 skipped**), the
+  state checks for all 25 scenarios (22/22 state OK, the reference fixes keep all 8 invariants)
+  and the oracle end-to-end run (23/25). They give the same result every time, so 3 runs would
+  only repeat the same numbers.
+- **The LLM parts can't be run 3 times today.** Mistral has no budget (402), and the Groq free
+  tier allows about 200k tokens a day per model. One knowledge run uses ~143k answer tokens, and
+  B alone has been waiting on the limit for hours. The git end-to-end run (batch B on your PC)
+  hasn't started yet, because it is queued behind Phase 5.
+- **Ready for when there is budget:** `eval/average_runs.py` groups result files by setting
+  (mode, prompt, check/decompose, answer model, judge) and prints the mean and min–max per
+  question type. It shows the earlier Mistral numbers next to them, labelled as a different
+  model. Commands:
+
+```
+# knowledge benchmark, 3 x A and 3 x B (same answer model each time)
+python -m eval.run_knowledge_eval --mode baseline --prompt v2 --check --judge groq
+python -m eval.run_knowledge_eval --mode baseline --prompt v2 --check --decompose --judge groq
+# git assistant end to end, 3 runs in one file
+python -m eval.run_git_e2e --runs 3
+# average everything
+python -m eval.average_runs eval/results/knowledge_baseline_v2_check*_2026112*.json eval/results/git_e2e_*.json --out eval/results/final_benchmark.md
+```
