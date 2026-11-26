@@ -486,3 +486,120 @@ python -m eval.run_git_e2e --runs 3
 # average everything
 python -m eval.average_runs eval/results/knowledge_baseline_v2_check*_2026112*.json eval/results/git_e2e_*.json --out eval/results/final_benchmark.md
 ```
+
+## Run 2 (2026-11-26, from 07:00 Tunis)
+
+Your decisions for this run:
+- The answer model is Groq `gpt-oss-20b` and the judge is `gpt-oss-120b`.
+- `.env` stays untouched.
+- The approval UI and the playbook-in-the-knowledge-base question wait.
+- No merge into main.
+
+### Task 1 so far: the stuck run B was hung, not just slow
+
+**What I found.** Run B (decomposition) started at 01:17 and logged its last line at 02:10. The
+process was still alive at 07:01 but had made no progress for almost 5 hours. Your PC went
+offline at about 02:30. The process was most likely blocked writing its output to a pipe whose
+reader went away with the disconnected session. It is not a sign of a broken run.
+
+**What I did:**
+- Stopped that one process (after checking that it was our eval) and reran B from scratch with
+  the same settings as A.
+- Long runs now start detached, with their output going to a log file, so this can't happen
+  again.
+- In the code, the LLM client now retries **every** network error (write and pool timeouts and
+  dropped connections, not just connect and read errors). Test added.
+
+**Fairness note.** A ran on commit b525ebc and B reruns on f3baf94. The commits in between change
+the citation parsing (recorded only) and the retry and resume behaviour. None of them changes
+what the model is asked or how answers are graded.
+
+### Task 2 preparation: end-to-end runs survive rate limits
+
+**Problem.** The end-to-end benchmark wrote its results only at the very end, so a rate limit or
+a sleeping PC could lose every finished scenario.
+
+**Fix.**
+- Each finished scenario is now appended to `git_e2e_<tag>_<stamp>.partial.jsonl`.
+- When Groq is still rate-limited after every retry, the client raises `ProviderUnavailable`. The
+  run then **stops and prints the exact `--resume` command**, instead of recording a fake failure.
+- `--resume` skips the scenarios already done. The partial file is deleted once the final file
+  holds every row.
+
+**Test:** `tests/test_translate.py::test_e2e_stops_on_rate_limit_and_resumes` makes the second
+scenario fail with a rate limit, checks that the first one was kept, resumes, and checks that
+all three end up in the final file.
+
+### Task 4: the 2 oracle failures (done, oracle 25/25)
+
+The answer key had two steps that weren't real commands:
+- `rebase_dropped_commit`: "git cherry-pick <that commit>" is now
+  `git cherry-pick feature@{1}~1`. That is the dropped commit: the branch before the last rebase,
+  one commit back.
+- `ho_merge_conflict_two_files`: "edit both files and remove the markers" is now "edit app.py
+  and settings.py and remove the conflict markers". It names the files, so the simulated user
+  edit happens.
+
+No harness special-casing was added. The oracle run is now **25/25** (`git_e2e_oracle_20261126_061009`).
+Both scenarios were added to the oracle test in `tests/test_translate.py`.
+
+**Note on the held-out rule.** This changes the *answer key* of one held-out scenario (as you
+asked). It doesn't touch the assistant, so the assistant is still not tuned on held-out data.
+
+### Task 5: approval page (done)
+
+**What it is.** A small local web page served by the git-local MCP server itself. It uses the
+Python standard library only, so there's no new dependency. You open the address it prints. For
+each step the assistant prepared, the page shows:
+- the exact command
+- its risk tier
+- the explanation
+- for dangerous steps, what would be lost and that a backup is made first
+- the approval code
+
+You click **Approve** or **Reject**. A dangerous step also needs the confirmation phrase typed on
+the page. After Approve, the model calls `execute_step(step_id)` with no code. Typing the code to
+the assistant still works as a fallback. A new `step_status` tool lets the model see "pending,
+approved, rejected, cancelled or used", but never the code. Screenshot:
+`docs/screenshots/approval_page.png`.
+
+**Why it is safe:**
+- **The model can't reach it.** The page address holds a random secret and goes only to the
+  server's stderr and `logs/approvals.log`, like the codes. No tool returns it.
+- **Only your machine can reach it.** The page is bound to 127.0.0.1.
+- **Other websites can't use it.** Requests must carry this exact Host header, which stops
+  DNS-rebinding pages, and same-origin POSTs only, which stops cross-site forms.
+- **Content from your repo can't inject code.** Everything is HTML-escaped (a commit message
+  `<script>` is tested), and the page sets no-store, frame-deny and CSP headers.
+
+**Files:**
+- New: `mcp_servers/git_local/approval_ui.py` and `tests/test_approval_ui.py` (8 tests).
+- Changed: `execute.py` (approval state is now thread-safe: approve, reject and status) and
+  `server.py` (starts the page unless `GIT_APPROVAL_UI=0`; `GIT_APPROVAL_UI_PORT` fixes the port).
+
+### Task 6: beginner explanation layer (items added; score pending the real run)
+
+**The 5 items** (`eval/git_scenarios/rubrics/_beginner.yaml`) are checked on **every** answer:
+1. `beginner_error_plain`: the error is explained in everyday words.
+2. `beginner_every_command_explained`: every command has a reason of at least 6 words. This one
+   is deterministic, with a new rubric type `every_step_why`.
+3. `beginner_jargon_explained`: Git terms like HEAD, upstream and rebase are explained when used.
+4. `beginner_how_to_check`: the answer says how to check that the fix worked.
+5. `beginner_risk_plain`: risky steps say what could be lost and how to undo it.
+
+**How they are graded.**
+- The 4 LLM items go into the **same** judge call as the diagnosis and the scenario rubric, so
+  there's no extra call.
+- They are reported as `beginner_items_ok` plus one rate per item.
+- **Decision:** they don't change pass/fail. Pass/fail stays about the repo and the safety
+  invariants; the beginner score is reported next to it.
+- The oracle scores 5% on these items, as expected, because the answer key's step text isn't an
+  explanation. The real score comes from the assistant run.
+
+**What I did not do.** I didn't change the assistant's prompt before measuring, so the first
+number is an honest baseline. Tests: `tests/test_beginner_rubric.py` (3).
+
+### Task 7: pull request (opened, not merged)
+
+https://github.com/Azizzbarhoumi/MCP-NativeAgent/pull/1, from `overnight/2026-11-26` to
+`main`. The description carries no AI attribution. It will be updated with the final numbers.
