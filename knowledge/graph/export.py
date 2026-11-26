@@ -7,9 +7,14 @@ Node types: source, document, section, chunk, entity
 Edges:      source -CONTAINS-> document -HAS_SECTION-> section -HAS_CHUNK-> chunk -MENTIONS-> entity
             document -MENTIONS-> entity (aggregated, so the default view needs no chunks)
 
+For git_docs the troubleshooting chains from knowledge/playbooks/git_errors.yaml are added
+(see troubleshoot.py): repo_state -> error -> cause -> command -> concept -> section.
+
 Usage:
   python -m knowledge.graph.export                      writes knowledge/graph/viewer/knowledge_graph.html
   python -m knowledge.graph.export --json graph.json    also writes the raw nodes/edges
+  python -m knowledge.graph.export --collection git_docs --chains-json chains.json
+                                                        also writes only the troubleshooting chains
 """
 
 import argparse
@@ -20,6 +25,7 @@ from pathlib import Path
 
 from knowledge.config import load_config
 from knowledge.graph.entities import extract
+from knowledge.graph import troubleshoot
 from knowledge.ingest.chunk import chunk_document
 from knowledge.ingest.parse import clean
 from knowledge.sources.local_docs import all_adapters
@@ -94,6 +100,18 @@ def build_full(collection: str | None = None) -> dict:
     return {"collection": collection, "nodes": list(nodes.values()), "edges": list(edges.values())}
 
 
+@lru_cache
+def build_graph(collection: str | None = None, chains: bool = True) -> dict:
+    """build_full plus the troubleshooting chains when the playbook targets this collection."""
+    g = build_full(collection)
+    if chains and troubleshoot.load().get("collection") == g["collection"]:
+        c = troubleshoot.build_chains(g)
+        for miss in c["unresolved"]:
+            print(f"  playbook doc link not found in the corpus: {miss}")
+        return troubleshoot.merge(g, c)
+    return g
+
+
 def select(graph: dict, node_types=DEFAULT_TYPES, max_nodes: int = 1500,
            focus: str | None = None, depth: int = 1) -> dict:
     """The subgraph a viewer should draw.
@@ -153,14 +171,21 @@ def main() -> None:
     ap.add_argument("--collection", default=None)
     ap.add_argument("--out", default=str(VIEWER / "knowledge_graph.html"))
     ap.add_argument("--json", help="also write the raw graph JSON here")
+    ap.add_argument("--chains-json", help="also write only the troubleshooting chains here")
+    ap.add_argument("--no-chains", action="store_true", help="leave the playbook chains out")
     a = ap.parse_args()
-    g = build_full(a.collection)
+    g = build_graph(a.collection, chains=not a.no_chains)
     counts = defaultdict(int)
     for n in g["nodes"]:
         counts[n["type"]] += 1
     print(f"{len(g['nodes'])} nodes {dict(counts)}, {len(g['edges'])} edges")
     if a.json:
         Path(a.json).write_text(json.dumps(g, ensure_ascii=False), encoding="utf-8")
+    if a.chains_json:
+        if not g.get("chains"):
+            raise SystemExit(f"no troubleshooting chains for collection {g['collection']!r}")
+        Path(a.chains_json).write_text(json.dumps(troubleshoot.chain_subgraph(g), ensure_ascii=False, indent=1),
+                                       encoding="utf-8")
     print(f"viewer: {write_viewer(g, Path(a.out))}")
 
 

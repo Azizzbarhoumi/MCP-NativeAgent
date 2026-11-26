@@ -23,7 +23,7 @@
   #results { margin-top:4px; }
   #results div { padding:4px 6px; border-radius:4px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   #results div:hover { background:var(--line); }
-  label.row { display:flex; align-items:center; gap:8px; padding:2px 0; cursor:pointer; }
+  .row { display:flex; align-items:center; gap:8px; padding:2px 0; cursor:pointer; }
   .dot { width:10px; height:10px; border-radius:50%; flex:none; }
   .count { margin-left:auto; color:var(--muted); font-variant-numeric: tabular-nums; }
   button { background:var(--line); color:var(--text); border:0; border-radius:6px; padding:6px 10px; cursor:pointer; font:inherit; }
@@ -45,9 +45,21 @@
 <div id="controls" class="panel">
   <h1>Knowledge graph</h1>
   <div class="sub" id="stats"></div>
+  <div id="chainbox" style="display:none">
+    <h2>View</h2>
+    <select id="view"><option value="chains">Troubleshooting chains</option><option value="docs">Documentation graph</option></select>
+    <div id="chainonly">
+      <h2>Error</h2>
+      <select id="chain"><option value="">All errors</option></select>
+      <div class="sub" style="margin-top:8px">repo state → error → cause → command → concept → doc section</div>
+      <h2>Command risk</h2>
+      <div id="tiers"></div>
+    </div>
+  </div>
   <h2>Search</h2>
   <input id="search" type="search" placeholder="entity, file or section…" autocomplete="off">
   <div id="results"></div>
+  <div id="docsonly">
   <h2>Collection</h2>
   <select id="collection"></select>
   <h2>Node types</h2>
@@ -55,6 +67,7 @@
   <h2>Size</h2>
   <label class="row">Max nodes <span class="count" id="maxv"></span></label>
   <input id="max" type="range" min="200" max="5000" step="100" value="1500" style="width:100%">
+  </div>
   <div style="margin-top:12px; display:flex; gap:8px"><button id="reset">Reset view</button><button id="fit">Fit</button></div>
 </div>
 
@@ -65,8 +78,15 @@
 <script id="graph-data" type="application/json">__GRAPH_DATA__</script>
 <script>
 const DATA = JSON.parse(document.getElementById('graph-data').textContent);
-const COLORS = { source:'#f78166', document:'#58a6ff', section:'#d2a8ff', chunk:'#8b949e', entity:'#3fb950' };
-const NAMES  = { source:'Sources', document:'Documents', section:'Sections', chunk:'Chunks', entity:'Entities' };
+const COLORS = { source:'#f78166', document:'#58a6ff', section:'#d2a8ff', chunk:'#8b949e', entity:'#3fb950',
+                 repo_state:'#ffa657', error:'#ff7b72', cause:'#e3b341', command:'#79c0ff', concept:'#56d4dd' };
+const NAMES  = { source:'Sources', document:'Documents', section:'Sections', chunk:'Chunks', entity:'Entities',
+                 repo_state:'Repo states', error:'Errors', cause:'Causes', command:'Commands', concept:'Concepts' };
+// Troubleshooting chains (git_docs only): built by knowledge/graph/troubleshoot.py from the playbook.
+const CHAIN_TYPES = new Set(['repo_state', 'error', 'cause', 'command', 'concept']);
+const CHAIN_REL = new Set(['LEADS_TO', 'HAS_CAUSE', 'FIXED_BY', 'USES', 'EXPLAINED_IN']);
+const TIER_COLORS = { safe:'#3fb950', careful:'#d29922', destructive:'#f85149', manual:'#8b949e' };
+const HAS_CHAINS = (DATA.chains || []).length > 0;
 const DEFAULT_TYPES = new Set(['source', 'document', 'entity']);   // readable default, no chunks
 
 const byId = new Map(DATA.nodes.map(n => [n.id, n]));
@@ -74,7 +94,32 @@ const adj = new Map(DATA.nodes.map(n => [n.id, new Set()]));
 for (const e of DATA.edges) { adj.get(e.source)?.add(e.target); adj.get(e.target)?.add(e.source); }
 
 const state = { types: new Set(DEFAULT_TYPES), max: 1500, expanded: new Set(), selected: null,
-                collection: DATA.collection };
+                collection: DATA.collection, view: HAS_CHAINS ? 'chains' : 'docs', chain: '' };
+const outE = new Map(), inE = new Map();
+for (const e of DATA.edges) if (CHAIN_REL.has(e.relation)) {
+  (outE.get(e.source) || outE.set(e.source, []).get(e.source)).push(e);
+  (inE.get(e.target) || inE.set(e.target, []).get(e.target)).push(e.source);
+}
+// A shared command ('git status') USES concepts for several errors; one error's view follows
+// only the USES edges that error declared.
+const follows = e => !state.chain || e.relation !== 'USES' || (e.chains || []).includes(state.chain);
+
+// Chain view: every chain node and the doc sections they point to, or one error's chain
+// (its repo states upstream, everything reachable downstream). Same rule as chain_subgraph().
+function chainSelection() {
+  const keep = new Set();
+  if (!state.chain) {
+    for (const n of DATA.nodes) if (CHAIN_TYPES.has(n.type)) keep.add(n.id);
+    for (const id of [...keep]) for (const e of outE.get(id) || []) keep.add(e.target);
+    return keep;
+  }
+  const start = 'error:' + state.chain, stack = [start];
+  keep.add(start);
+  while (stack.length) for (const e of outE.get(stack.pop()) || [])
+    if (follows(e) && !keep.has(e.target)) { keep.add(e.target); stack.push(e.target); }
+  for (const s of inE.get(start) || []) if (byId.get(s).type === 'repo_state') keep.add(s);
+  return keep;
+}
 
 // Same rule as select() in export.py: sources and documents first, then the most connected
 // nodes, entities used by a single document last (they are leaves and make hairballs).
@@ -91,6 +136,12 @@ function baseSelection() {
 }
 
 function visibleGraph() {
+  if (state.view === 'chains') {
+    const keep = chainSelection();
+    const links = DATA.edges.filter(e => CHAIN_REL.has(e.relation) && follows(e) && keep.has(e.source) && keep.has(e.target))
+      .map(e => ({ source: e.source, target: e.target, relation: e.relation }));
+    return { nodes: [...keep].map(id => byId.get(id)), links };
+  }
   const keep = baseSelection();
   for (const id of state.expanded) {          // expanded nodes ignore the type filter
     keep.add(id);
@@ -109,11 +160,11 @@ const Graph = ForceGraph()(el)
   .backgroundColor('#0d1117')
   .nodeId('id')
   .nodeLabel(n => `${NAMES[n.type].slice(0, -1)}: ${n.label}`)
-  .nodeVal(n => n.type === 'source' ? 40 : 1 + Math.sqrt(n.degree))
+  .nodeVal(n => n.type === 'source' ? 40 : state.view === 'chains' ? 2 : 1 + Math.sqrt(n.degree))
   .nodeRelSize(2.2)
   .nodeColor(n => (!state.selected || n.id === state.selected || neighbourSet.has(n.id)) ? COLORS[n.type] : '#30363d')
   .linkColor(l => {
-    if (!state.selected) return 'rgba(139,148,158,0.18)';
+    if (!state.selected) return state.view === 'chains' ? 'rgba(139,148,158,0.32)' : 'rgba(139,148,158,0.18)';
     const s = l.source.id ?? l.source, t = l.target.id ?? l.target;
     return (s === state.selected || t === state.selected) ? 'rgba(88,166,255,0.55)' : 'rgba(139,148,158,0.04)';
   })
@@ -121,6 +172,7 @@ const Graph = ForceGraph()(el)
   .cooldownTicks(250)
   .nodeCanvasObjectMode(() => 'after')
   .nodeCanvasObject((n, ctx, scale) => {
+    if (state.view === 'chains') return drawChainNode(n, ctx, scale);
     const show = n.type === 'source' || n.id === state.selected
       || (n.type === 'document' && scale > 1.6) || (n.type === 'entity' && (scale > 2.6 || n.degree > 60 && scale > 1.2))
       || ((n.type === 'section' || n.type === 'chunk') && scale > 3.5);
@@ -131,16 +183,97 @@ const Graph = ForceGraph()(el)
     ctx.fillStyle = n.type === 'source' ? '#f0f6fc' : 'rgba(230,237,243,0.8)';
     ctx.fillText(n.label.length > 40 ? n.label.slice(0, 38) + '…' : n.label, n.x, n.y + Math.sqrt(n.type === 'source' ? 40 : 1 + Math.sqrt(n.degree)) * 2.2 + 1 / scale);
   })
-  .onNodeClick(n => selectNode(n.id, true))
+  .linkDirectionalArrowLength(l => state.view === 'chains' ? 3 : 0)
+  .linkDirectionalArrowRelPos(1)
+  .onNodeClick(n => selectNode(n.id, state.view !== 'chains'))
   .onBackgroundClick(() => { state.selected = null; neighbourSet = new Set(); detailsEl.style.display = 'none'; Graph.nodeColor(Graph.nodeColor()); });
 
+function chainLabel(n) {
+  if (n.type === 'section') { const parts = n.section.split(' > '); return `${n.path.split('/').pop()} › ${parts[parts.length - 1]}`; }
+  if (n.type === 'document') return n.path.split('/').pop();
+  return n.label;
+}
+function drawChainNode(n, ctx, scale) {
+  const r = Math.sqrt(2) * 2.2;
+  if (n.type === 'command') {          // ring = risk tier from risk.py
+    ctx.beginPath(); ctx.arc(n.x, n.y, r + 1.6, 0, 2 * Math.PI);
+    ctx.strokeStyle = TIER_COLORS[n.tier] || '#8b949e'; ctx.lineWidth = 1.8; ctx.stroke();
+  }
+  const dim = state.selected && n.id !== state.selected && !neighbourSet.has(n.id);
+  ctx.font = `${n.type === 'error' ? 600 : 400} ${FONT}px ${n.type === 'command' ? 'ui-monospace, Consolas, monospace' : 'system-ui, sans-serif'}`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = dim ? 'rgba(230,237,243,0.25)' : 'rgba(230,237,243,0.92)';
+  ctx.fillText(n.__text || chainLabel(n), n.x + r + 3, n.y);
+}
+
+// Chain view layout: deterministic columns, no physics. One column per level
+// (repo state, error, cause, command, concept, doc section); inside a column, nodes are sorted
+// by the average row of the nodes that point to them, so edges cross as little as possible.
+const FONT = 10, ROW = 15, COL_GAP = 34;
+const measure = document.createElement('canvas').getContext('2d');
+function labelWidth(n, text) {
+  measure.font = `${n.type === 'error' ? 600 : 400} ${FONT}px ${n.type === 'command' ? 'ui-monospace, Consolas, monospace' : 'system-ui, sans-serif'}`;
+  return measure.measureText(text).width;
+}
+function layoutChains(nodes, links) {
+  const max = state.chain ? 40 : 30;
+  const cols = [];
+  for (const n of nodes) {
+    const t = chainLabel(n);
+    n.__text = t.length > max ? t.slice(0, max - 2) + '…' : t;
+    n.__w = labelWidth(n, n.__text);
+    (cols[n.level] ||= []).push(n);
+  }
+  const parents = new Map(), children = new Map();
+  for (const l of links) {
+    const s = l.source.id ?? l.source, t = l.target.id ?? l.target;
+    (parents.get(t) || parents.set(t, []).get(t)).push(s);
+    (children.get(s) || children.set(s, []).get(s)).push(t);
+  }
+  const row = new Map();
+  const mean = (ids, fallback) => { const v = (ids || []).filter(i => row.has(i)).map(i => row.get(i)); return v.length ? v.reduce((a, b) => a + b) / v.length : fallback; };
+  const place = (col, key) => col.map((n, i) => [n, key(n, i)]).sort((a, b) => a[1] - b[1]).forEach(([n], i) => row.set(n.id, i - (col.length - 1) / 2));
+  // errors first in a stable order, then left (repo states) and right (causes, commands, ...)
+  place(cols[1] || [], (n, i) => i);
+  place(cols[0] || [], (n, i) => mean(children.get(n.id), i));
+  for (let l = 2; l < cols.length; l++) place(cols[l] || [], (n, i) => mean(parents.get(n.id), i));
+  let x = 0;
+  for (let l = 0; l < cols.length; l++) {
+    const col = cols[l] || [];
+    for (const n of col) { n.fx = n.x = x; n.fy = n.y = row.get(n.id) * ROW * (state.chain ? 2 : 1); }
+    x += Math.max(0, ...col.map(n => n.__w)) + COL_GAP;
+  }
+}
+function unpin(nodes) { for (const n of nodes) { delete n.fx; delete n.fy; } }
+
+// Fit into the area the panels leave free (left panel, label room on the right).
+function fitView() {
+  const ns = Graph.graphData().nodes.filter(n => n.x !== undefined);
+  if (!ns.length) return;
+  const xs = ns.map(n => n.x), ys = ns.map(n => n.y);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const W = el.clientWidth, H = el.clientHeight, wide = W > 700;
+  const chains = state.view === 'chains';
+  const x1r = chains ? Math.max(...ns.map(n => n.x + 10 + (n.__w || 0))) : x1;   // label room
+  const left = wide ? 310 : 16, right = 30;
+  const k = Math.min(chains ? 2.2 : 4, (W - left - right) / Math.max(x1r - x0, 1), (H - 60) / Math.max(y1 - y0, 1));
+  const S = left + (W - left - right) / 2;           // screen x where the bbox centre should land
+  Graph.zoom(k, 400);
+  Graph.centerAt((x0 + x1r) / 2 - (S - W / 2) / k, (y0 + y1) / 2, 400);
+}
+
 let fitted = false;
-Graph.onEngineStop(() => { if (!fitted) { Graph.zoomToFit(400, 40); fitted = true; } });
+Graph.onEngineStop(() => { if (!fitted) { fitView(); fitted = true; } });
 
 // Keep node objects (and so positions) across refreshes: force-graph mutates them with x/y.
 function refresh() {
   const g = visibleGraph();
+  const chains = state.view === 'chains';
+  unpin(DATA.nodes);
+  if (chains) layoutChains(g.nodes, g.links);
+  Graph.cooldownTicks(chains ? 1 : 250);
   Graph.graphData(g);
+  if (chains) { fitted = true; setTimeout(fitView, 50); }
   document.getElementById('stats').textContent =
     `${g.nodes.length.toLocaleString()} of ${DATA.nodes.length.toLocaleString()} nodes · ${g.links.length.toLocaleString()} edges`;
 }
@@ -152,20 +285,24 @@ function selectNode(id, expand) {
   state.selected = id;
   if (expand) state.expanded.add(id);
   neighbourSet = new Set(adj.get(id));
-  refresh();
+  if (state.view === 'chains') Graph.nodeColor(Graph.nodeColor());   // repaint only, keep the layout
+  else refresh();
   const counts = {};
   for (const x of adj.get(id)) { const t = byId.get(x).type; counts[t] = (counts[t] || 0) + 1; }
   const rows = [['Type', `<span class="tag" style="background:${COLORS[n.type]}">${n.type}</span>${n.kind ? ' ' + esc(n.kind) : ''}`],
     n.source && ['Source', esc(n.source)], n.path && ['File', esc(n.path)], n.section && ['Section', esc(n.section)],
     n.url && ['Link', `<a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.url)}</a>`],
     ['Links', Object.entries(counts).map(([t, c]) => `${c} ${c > 1 ? NAMES[t].toLowerCase() : t}`).join(', ')],
-    n.type === 'entity' && ['Used in', `${n.docs} document(s), ${n.sources} source(s)`]].filter(Boolean);
+    n.type === 'entity' && ['Used in', `${n.docs} document(s), ${n.sources} source(s)`],
+    n.tier && ['Risk', `<span class="tag" style="background:${TIER_COLORS[n.tier]}">${esc(n.tier)}</span> ${esc(n.reason)}`],
+    n.docs && Array.isArray(n.docs) && ['Docs', n.docs.map(esc).join('<br>')]].filter(Boolean);
   detailsEl.innerHTML = `<h1>${esc(n.label)}</h1>
     <div class="kv">${rows.map(([k, v]) => `<div>${k}</div><div>${v}</div>`).join('')}</div>
     ${n.preview ? `<h2>Text</h2><div class="preview">${esc(n.preview)}</div>` : ''}
     <div style="margin-top:10px; display:flex; gap:8px">
       <button onclick="collapse('${esc(id)}')">Collapse</button></div>`;
   detailsEl.style.display = 'block';
+  if (state.view === 'chains') return;      // fixed layout: no recentring or zoom jumps
   setTimeout(() => { if (n.x !== undefined) { Graph.centerAt(n.x, n.y, 600); if (Graph.zoom() < 2.5) Graph.zoom(2.5, 600); } }, 300);
 }
 function collapse(id) { state.expanded.delete(id); refresh(); }
@@ -188,7 +325,7 @@ max.oninput = () => { maxv.textContent = max.value; };
 max.onchange = () => { state.max = +max.value; refresh(); };
 document.getElementById('reset').onclick = () => { state.expanded.clear(); state.selected = null; neighbourSet = new Set();
   detailsEl.style.display = 'none'; fitted = false; refresh(); };
-document.getElementById('fit').onclick = () => Graph.zoomToFit(400, 40);
+document.getElementById('fit').onclick = () => fitView();
 
 const search = document.getElementById('search'), results = document.getElementById('results');
 search.oninput = () => {
@@ -199,10 +336,47 @@ search.oninput = () => {
   for (const n of hits) {
     const d = document.createElement('div');
     d.innerHTML = `<span class="dot" style="display:inline-block;background:${COLORS[n.type]}"></span> ${esc(n.label)} <span class="sub">${esc(n.source || n.kind || '')}</span>`;
-    d.onclick = () => { results.innerHTML = ''; search.value = n.label; selectNode(n.id, true); };
+    d.onclick = () => {
+      results.innerHTML = ''; search.value = n.label;
+      if (state.view === 'chains') {           // an error opens its chain; anything else, the doc graph
+        if (n.type === 'error') { state.chain = n.chain; document.getElementById('chain').value = n.chain; }
+        else { state.view = 'docs'; document.getElementById('view').value = 'docs';
+               document.getElementById('view').onchange(); }
+      }
+      selectNode(n.id, state.view !== 'chains');
+    };
     results.appendChild(d);
   }
 };
+
+// Troubleshooting controls (only when the data has chains)
+if (HAS_CHAINS) {
+  document.getElementById('chainbox').style.display = 'block';
+  const viewEl = document.getElementById('view'), chainEl = document.getElementById('chain');
+  for (const n of DATA.nodes.filter(n => n.type === 'error').sort((a, b) => a.label.localeCompare(b.label)))
+    chainEl.add(new Option(n.label, n.chain));
+  const tiersEl = document.getElementById('tiers');
+  for (const [t, c] of Object.entries(TIER_COLORS)) {
+    const k = DATA.nodes.filter(n => n.type === 'command' && n.tier === t).length;
+    tiersEl.insertAdjacentHTML('beforeend', `<div class="row"><span class="dot" style="background:transparent;border:2px solid ${c}"></span>${t}<span class="count">${k}</span></div>`);
+  }
+  const sync = () => {
+    document.getElementById('chainonly').style.display = state.view === 'chains' ? 'block' : 'none';
+    document.getElementById('docsonly').style.display = state.view === 'chains' ? 'none' : 'block';
+  };
+  viewEl.onchange = () => { state.view = viewEl.value; state.selected = null; neighbourSet = new Set();
+    detailsEl.style.display = 'none'; fitted = false; sync(); refresh(); };
+  chainEl.onchange = () => { state.chain = chainEl.value; state.selected = null; neighbourSet = new Set();
+    detailsEl.style.display = 'none'; fitted = false; refresh(); };
+  // Deep link for screenshots and sharing: #chain=merge_conflict or #view=docs
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get('view') === 'docs') state.view = 'docs';
+  if (h.get('chain') && DATA.nodes.some(n => n.id === 'error:' + h.get('chain'))) state.chain = h.get('chain');
+  viewEl.value = state.view; chainEl.value = state.chain; sync();
+}
+document.getElementById('hint').textContent = HAS_CHAINS
+  ? 'Pick an error to follow its chain. Ring colour on commands = risk tier. Click a node for details.'
+  : document.getElementById('hint').textContent;
 
 refresh();
 </script>
