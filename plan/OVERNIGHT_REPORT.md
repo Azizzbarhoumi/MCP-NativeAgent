@@ -976,3 +976,32 @@ with a test:
 **Tests:** **316 passed, 11 skipped.**
 - **Oracle e2e on this branch:** still 25/25, with 100% tier agreement on both sets.
 - All of this is on `step/web-ui` only.
+
+### Run 4, part 3: the A vs B comparison, ready before run B finishes (23:30 to 23:50 Tunis)
+
+**What:** `python -m eval.compare_runs A.json B.json --out eval/results/compare_A_vs_B.md`
+(commit 60130cf, on `step/web-ui`).
+
+**Why:** Run 3 task 1 asks for an honest A vs B verdict per question type, and for the report to
+say so if one pair is within noise. The script decides this by a fixed rule written down before
+B's numbers exist, so the rule can't be bent to fit the result.
+
+**How it decides:**
+- It pairs the two runs by question id and looks only at the questions whose verdict changed.
+- It uses the exact McNemar test on those changed questions.
+- A net gap of 1 or 2 questions is always "within noise", because repeated runs of the same
+  setting have already differed by that much. A bigger gap with p >= 0.05 is still within noise.
+- Even a clear win says "confirm with a second pair before changing the default".
+- It refuses to compare runs whose answer model, judge, retrieval mode or k differ. The older
+  decomposition runs from 24 November were answered by Mistral, so they can't be paired with A.
+- It also works on B's `.partial.jsonl` while B is still running. It then compares only the
+  questions in both runs and marks the verdict provisional.
+
+**Also reported:** wrong answers delivered (incorrect and not a refusal), tokens and latency per
+question, and how many multi_hop questions and other questions the decomposer split.
+
+**Tests:** 19 new tests (McNemar values against the binomial, pairing, per-type counts, noise
+rule, refusals, partial input, the markdown output). **335 passed, 11 skipped.**
+
+**Next:** when the PC commits B's result to `overnight/2026-11-26`, run the script and write the
+verdict here.
