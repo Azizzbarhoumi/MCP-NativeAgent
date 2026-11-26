@@ -528,6 +528,25 @@ what the model is asked or how answers are graded.
   Full suite: 269 passed, 11 skipped (the live tests that need your PC).
 - Next: the scheduled restart tonight at 02:30 Tunis, after Groq's daily reset.
 
+**Knowledge eval now saves and resumes too (12:10).** Until now, a rate limit that outlasted the
+retries made `eval.run_knowledge_eval` *skip* the question and carry on. That quietly changes
+the question set, so two runs stop being comparable. Now:
+- A rate limit or a network failure that outlasts the retries **stops** the run; it never skips.
+  This holds for the answer call and for the judge call.
+- Every judged question is appended to a `.partial.jsonl` at once; `--resume <file>` runs only
+  the questions not yet done. The first line of that file holds the run's settings (mode, prompt
+  tags, judge, k, answer model), and a resume with different settings is refused, so one result
+  can never mix two settings.
+- Why it matters for B: A used about 4,600 gpt-oss-20b tokens per question (143k for 31). B adds
+  decomposition calls, so B probably **doesn't fit in one day's ~200k-token allowance** on its
+  own. With resume, B can finish over two windows without losing or redoing questions.
+- Fairness: this changes when a run stops, not what the model is asked or how it's graded.
+- Tests: `tests/test_knowledge_eval_resume.py` (3). Suite: 272 passed, 11 skipped.
+- Your PC now waits for the budget by itself: every 30 minutes it sends one small probe to
+  gpt-oss-20b and gpt-oss-120b. When both answer, it starts B, then the e2e tuned set, then the
+  held-out set. Each run resumes from where it stopped. A run that hits a rate-limit wait of
+  over 5 minutes is stopped and retried after the next reset.
+
 ### Task 2 preparation: end-to-end runs survive rate limits
 
 **Problem.** The end-to-end benchmark wrote its results only at the very end, so a rate limit or
@@ -653,3 +672,42 @@ the config, default off.
   This is a test change, so it's yours to make.
 - (b) Try fusion weighted toward BM25 for git_docs, because exact command words matter there.
   This needs a retrieval benchmark run before it's kept.
+
+### Task 3 follow-up: my decision on the two misses (12:15)
+
+You said to go ahead without waiting for you, so I decided this one myself: **no retrieval
+change, and the test stays strict.** A read-only diagnostic on your PC (ranks in the top 50 of
+each search):
+
+| probe | dense | BM25 | hybrid top 5 |
+|---|---|---|---|
+| 8 other probes | 1-2 | 1-2 | pass |
+| stash | 7 | 1 | **miss** |
+| reflog | none | none | **miss** |
+
+Why no change:
+- **Reflog can't be fixed by fusion at all.** No chunk of `git-reflog.adoc` is in either top 50.
+  That man page is mostly OPTIONS text and never says "lost a commit". This is a wording gap
+  between a beginner's question and a reference page, not a ranking bug.
+- **A BM25-weighted fusion could fix stash**, but I would be choosing the weight on the very test
+  that measures it: 1 probe out of 10, with no other git_docs benchmark to check against. That's
+  tuning on the test.
+- The sections that win do answer both questions (user manual "Temporarily setting aside work in
+  progress" and "Recovering lost changes > Reflogs").
+
+So the result stands as **8 of 10 probes, 2 honest misses**. The real fix for the wording gap is
+the one we already planned: the troubleshooting playbook links "lost commit" to the reflog
+concept and to its doc sections. Using that for retrieval is the playbook-in-the-knowledge-base
+question, which you said waits.
+
+### Task 8 so far: averaged table of what has run
+
+`eval/results/final_benchmark.md`, made with `eval.average_runs`. Every row names its answer
+model:
+- **Knowledge, baseline + v2 + checker:** answer model **Groq gpt-oss-20b**, judge Groq
+  gpt-oss-120b, **1 run**: 87% (lookup 100%, exact_match 91%, multi_hop 62%), retrieval hit 97%,
+  2 of 31 wrong answers delivered. One run, so no min-max yet.
+- **Git e2e, oracle** (no LLM; it runs the answer key's fix): 25/25 passed on both the tuned and
+  held-out sets. This checks the harness, not the assistant.
+- The B rows and the real assistant e2e rows come once the budget allows (see Task 1).
+
