@@ -21,6 +21,7 @@ import yaml
 
 from common import llm
 from common.config import settings
+from common.console import utf8_console
 from common.llm import chat
 from common.schemas import new_id
 from common.tracing import flush
@@ -60,6 +61,7 @@ def judge(question: str, expected: str, answer: str, task_id: str,
 
 
 def main() -> None:
+    utf8_console()
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", default="baseline")
     ap.add_argument("--k", type=int, default=None)

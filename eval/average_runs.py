@@ -18,6 +18,7 @@ from collections import defaultdict
 from pathlib import Path
 from statistics import mean
 
+from common.console import utf8_console
 from knowledge.answer import NOT_FOUND
 
 REFERENCE = {"baseline+v1": 0.29, "baseline+v2": 0.74, "hybrid+v2": 0.71, "baseline+v2_check": 0.77}
@@ -89,6 +90,7 @@ def e2e_table(runs: list[dict]) -> list[str]:
 
 
 def main() -> None:
+    utf8_console()
     ap = argparse.ArgumentParser()
     ap.add_argument("files", nargs="+")
     ap.add_argument("--out", help="also write the markdown here")

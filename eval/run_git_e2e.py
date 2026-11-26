@@ -33,6 +33,7 @@ from pathlib import Path
 
 from common import llm
 from common.config import settings
+from common.console import utf8_console
 from common.schemas import new_id
 from eval.git_scenarios import rubric as rubric_mod
 from eval.git_scenarios.checks import check, invariants, snapshot
@@ -322,6 +323,7 @@ def table(rows: list[dict], runs: int) -> list[str]:
 
 
 def main() -> None:
+    utf8_console()
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs", type=int, default=1)
     ap.add_argument("--only", help="comma-separated scenario ids")

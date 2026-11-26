@@ -514,6 +514,20 @@ reader went away with the disconnected session. It is not a sign of a broken run
 the citation parsing (recorded only) and the retry and resume behaviour. None of them changes
 what the model is asked or how answers are graded.
 
+**Retry at 11:40 (still blocked, plus one real bug found and fixed).**
+- A one-question probe at 11:40 answered with no rate-limit wait, so I started B. It crashed on
+  its first answer with `UnicodeEncodeError`: gpt-oss cites as `【1】`, and Windows writes
+  redirected output as cp1252, which cannot hold that character. A real bug, not a fluke.
+- The relaunch (with UTF-8 output for that process only) got a 553 s rate-limit wait on its
+  first call, so I stopped it with 0 of 31 done and no result file. The small probe only passed
+  because it was small. The daily token cap for gpt-oss-20b was still used up.
+- Fix: new `common/console.py` with `utf8_console()`, called first by every command-line entry
+  point (`eval.run_knowledge_eval`, `knowledge.ask`, `eval.run_git_e2e`, `eval.average_runs`).
+  It writes UTF-8 and replaces anything that still can't be written, so a print never kills a
+  long run. Tests: `tests/test_console.py` (3, one runs a real process with cp1252 output).
+  Full suite: 269 passed, 11 skipped (the live tests that need your PC).
+- Next: the scheduled restart tonight at 02:30 Tunis, after Groq's daily reset.
+
 ### Task 2 preparation: end-to-end runs survive rate limits
 
 **Problem.** The end-to-end benchmark wrote its results only at the very end, so a rate limit or
