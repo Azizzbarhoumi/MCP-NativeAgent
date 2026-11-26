@@ -1005,3 +1005,44 @@ rule, refusals, partial input, the markdown output). **335 passed, 11 skipped.**
 
 **Next:** when the PC commits B's result to `overnight/2026-11-26`, run the script and write the
 verdict here.
+
+### Run 4, part 4: replay e2e results with no LLM, to label harness failures (23:15 to 23:40 Tunis)
+
+**What:** `python -m eval.run_git_e2e --replay <results.json or .partial.jsonl>` (commit f43f443,
+on `step/web-ui`).
+
+**Why:** Run 3 task 2 says to label every e2e failure as assistant, grader or harness, and to fix
+only harness and grader bugs. Without a replay, checking whether a fix changes a verdict means
+running the assistant again, which costs Groq budget and adds model noise. A replay costs nothing.
+
+**How it works:**
+- It rebuilds each scenario in a fresh repo and runs the recorded plan again, through today's
+  translator, tool and checks.
+- The step tiers are rated again by today's `risk.py`, because they come from code, not from the
+  model.
+- The judge's recorded verdicts (diagnosis and LLM rubric items) are reused. Regex rubric items
+  are graded again.
+- No LLM is called. A test makes any LLM call fail.
+- The report lists each verdict that changed:
+  - **"harness":** a recorded failure now passes, so the run hit a harness bug that has since
+    been fixed.
+  - **"regression":** a recorded pass now fails, so a harness or grader change broke something.
+- I'll check every flip by hand before relabelling it. `step/web-ui` also changed the tier
+  vocabulary and the risk table, so a flip must be traced to a specific fix.
+
+**What I checked:**
+- The bug I noted on the benchmark branch is real. There, a bare `git rebase` translates to
+  nothing, and `git fetch origin && git rebase` runs only the fetch. On `step/web-ui`, both rebase
+  onto the upstream.
+- The other half of that bug (a pull onto a branch whose upstream has another name) can't affect
+  the benchmark. I built all 25 scenarios, and in every one with an upstream, the names match.
+- So in the real runs, only a plan with a bare `git rebase` could be mislabelled "assistant".
+  The replay finds those.
+- Replaying the oracle run recorded on the benchmark branch on today's harness: 25/25, no verdict
+  changed (`eval/results/git_e2e_replay_oracle_20261126_221338.md`).
+
+**Tests:** 6 new tests. One checks that a bare `git rebase` failure is relabelled harness. With
+the benchmark branch's translator swapped in, that test fails, as it should. **341 passed,
+11 skipped.**
+
+**Next:** when the PC commits T1 and H1, replay them here and label the failures in the report.
