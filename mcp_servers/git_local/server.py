@@ -8,11 +8,14 @@ Writes: prepare_step gives the plan line (tier, explanation, what a dangerous st
 and a step id; execute_step runs it only with the user's approval code (plus the confirmation
 phrase for dangerous steps). There is no tool that runs raw commands.
 
-Approval: the model never sees the approval token. prepare_step returns a step_id; the
-approval code goes to the human outside the model's context (this process's stderr and
-logs/approvals.log); execute_step needs that code. In-process agent code can still use
+Approval: the model never sees the approval token. prepare_step returns a step_id. The human
+approves on a local approval page (approval_ui.py; its secret address goes to this process's
+stderr and logs/approvals.log, never to the model) or gives the model the approval code shown
+there. execute_step runs a step only after one of the two. In-process agent code can still use
 execute.prepare/execute directly and hold the token itself.
 """
+
+import os
 
 try:  # mcp 2.x renamed FastMCP to MCPServer; support both so the venv version doesn't matter
     from mcp.server.mcpserver import MCPServer as Server
@@ -86,12 +89,24 @@ def prepare_step(path: str, op: str, params: dict, task_id: str = "-") -> dict:
 
 
 @mcp.tool()
-def execute_step(step_id: str, approval_code: str, confirmation: str | None = None, task_id: str = "-") -> dict:
-    """Run ONE prepared step, only with the approval code the user typed (and, for dangerous
-    steps, the confirmation phrase the user typed). Works once, for the exact step and repo
-    state it was prepared for. Returns the new state in plain words and how to undo."""
+def step_status(step_id: str) -> dict:
+    """Whether the user approved a prepared step on their approval page: pending, approved,
+    rejected, cancelled or used. Ask the user and wait while it is pending."""
+    return ex.step_status(step_id)
+
+
+@mcp.tool()
+def execute_step(step_id: str, approval_code: str | None = None, confirmation: str | None = None,
+                 task_id: str = "-") -> dict:
+    """Run ONE prepared step once the user approved it: either they clicked Approve on their
+    approval page (pass only step_id), or they typed you the approval code (and, for dangerous
+    steps, the confirmation phrase). Works once, for the exact step and repo state it was
+    prepared for. Returns the new state in plain words and how to undo."""
     return ex.execute_with_code(step_id, approval_code, confirmation, task_id)
 
 
 if __name__ == "__main__":
+    if os.environ.get("GIT_APPROVAL_UI", "1") != "0":
+        from mcp_servers.git_local import approval_ui
+        approval_ui.start(int(os.environ.get("GIT_APPROVAL_UI_PORT", "0")))
     mcp.run()

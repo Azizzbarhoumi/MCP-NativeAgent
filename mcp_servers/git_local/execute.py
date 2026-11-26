@@ -19,6 +19,7 @@ import json
 import re
 import secrets
 import shutil
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -456,7 +457,9 @@ def execute(token: str, path: str, op: str, params: dict | None, confirmation: s
 
 APPROVALS_LOG = LOG.with_name("approvals.log")
 _STEPS: dict[str, dict] = {}
+_DECIDED: dict[str, str] = {}          # step id -> "rejected" / "cancelled" / "used", for step_status
 MAX_CODE_ATTEMPTS = 3
+_LOCK = threading.Lock()               # the approval page runs in another thread
 
 
 def _show_code_to_human(step_id: str, command: str, tier: str, code: str) -> None:
@@ -474,28 +477,84 @@ def prepare_for_model(path: str, op: str, params: dict | None, task_id: str = "-
         return p
     step_id = secrets.token_hex(4)
     code = "".join(secrets.choice("ABCDEFGHJKLMNPQRSTUVWXYZ23456789") for _ in range(6))
-    _STEPS[step_id] = {"token": p.pop("approval_token"), "code_hash": hashlib.sha256(code.encode()).hexdigest(),
-                       "path": path, "op": op, "params": dict(params or {}), "attempts": 0,
-                       "phrase": p.get("confirm_phrase")}
+    with _LOCK:
+        _STEPS[step_id] = {"token": p.pop("approval_token"), "code_hash": hashlib.sha256(code.encode()).hexdigest(),
+                           "path": path, "op": op, "params": dict(params or {}), "attempts": 0,
+                           "phrase": p.get("confirm_phrase"),
+                           # shown on the human's approval page only, never returned to the model
+                           "human": {"code": code, "command": p["command"], "tier": p["tier"], "explain": p["explain"],
+                                     "would_lose": p.get("would_lose", []), "repo": path, "phrase": p.get("confirm_phrase"),
+                                     "created": datetime.now(timezone.utc).isoformat(timespec="seconds")},
+                           "approved": False, "confirmation": None}
     _show_code_to_human(step_id, p["command"], p["tier"], code)
-    p.update(step_id=step_id, approval="Show this step to the user. They will see an approval code in the "
-                                       "git-local approval window/log and type it to you if they agree.")
+    p.update(step_id=step_id, approval="Show this step to the user and wait. They approve it on their git-local "
+                                       "approval page (then call execute_step with the step_id only), or they "
+                                       "type you the approval code from that page.")
     return p
 
 
-def execute_with_code(step_id: str, approval_code: str, confirmation: str | None = None, task_id: str = "-") -> dict:
-    step = _STEPS.get(step_id)
-    if step is None:
-        return {"ok": False, "refused": "refused: unknown, used or cancelled step id; prepare it again"}
-    good = hmac.compare_digest(hashlib.sha256(str(approval_code or "").encode()).hexdigest(), step["code_hash"])
-    if not good:
-        step["attempts"] += 1
-        if step["attempts"] >= MAX_CODE_ATTEMPTS:
+# ---- used by the human's approval page (approval_ui.py), never exposed as an MCP tool
+
+def pending_for_human() -> list[dict]:
+    with _LOCK:
+        return [{"step_id": sid, "approved": st["approved"], **st["human"]}
+                for sid, st in _STEPS.items()]
+
+
+def approve_by_human(step_id: str, confirmation: str | None = None) -> dict:
+    with _LOCK:
+        st = _STEPS.get(step_id)
+        if st is None:
+            return {"ok": False, "error": "unknown or finished step"}
+        if st["phrase"] and confirmation != st["phrase"]:
+            return {"ok": False, "error": f"dangerous step: type exactly '{st['phrase']}' to approve"}
+        st.update(approved=True, confirmation=confirmation if st["phrase"] else None)
+    return {"ok": True}
+
+
+def reject_by_human(step_id: str, task_id: str = "-") -> dict:
+    with _LOCK:
+        st = _STEPS.pop(step_id, None)
+        if st is None:
+            return {"ok": False, "error": "unknown or finished step"}
+        _PENDING.pop(st["token"], None)
+        _DECIDED[step_id] = "rejected"
+    _log(task_id, op=st["op"], outcome="refused", error="rejected by the user on the approval page")
+    return {"ok": True}
+
+
+def step_status(step_id: str) -> dict:
+    """For the model: pending, approved, rejected, cancelled or used. Never the code."""
+    with _LOCK:
+        st = _STEPS.get(step_id)
+        if st is not None:
+            return {"step_id": step_id, "status": "approved" if st["approved"] else "pending"}
+        return {"step_id": step_id, "status": _DECIDED.get(step_id, "unknown")}
+
+
+def execute_with_code(step_id: str, approval_code: str | None = None, confirmation: str | None = None,
+                      task_id: str = "-") -> dict:
+    with _LOCK:
+        step = _STEPS.get(step_id)
+        if step is None:
+            return {"ok": False, "refused": "refused: unknown, used or cancelled step id; prepare it again"}
+        if step["approved"]:                      # the user clicked Approve on the approval page
             _STEPS.pop(step_id, None)
-            _PENDING.pop(step["token"], None)
-            _log(task_id, op=step["op"], outcome="refused", error="approval code wrong 3 times; step cancelled")
-            return {"ok": False, "refused": "refused: wrong approval code 3 times; the step is cancelled"}
-        _log(task_id, op=step["op"], outcome="refused", error="wrong approval code")
-        return {"ok": False, "refused": "refused: wrong approval code (only the user has it)"}
-    _STEPS.pop(step_id, None)
+            _DECIDED[step_id] = "used"
+            confirmation = step["confirmation"] if step["phrase"] else confirmation
+        elif not approval_code:
+            return {"ok": False, "refused": "waiting: the user has not approved this step yet"}
+        elif not hmac.compare_digest(hashlib.sha256(str(approval_code).encode()).hexdigest(), step["code_hash"]):
+            step["attempts"] += 1
+            if step["attempts"] >= MAX_CODE_ATTEMPTS:
+                _STEPS.pop(step_id, None)
+                _PENDING.pop(step["token"], None)
+                _DECIDED[step_id] = "cancelled"
+                _log(task_id, op=step["op"], outcome="refused", error="approval code wrong 3 times; step cancelled")
+                return {"ok": False, "refused": "refused: wrong approval code 3 times; the step is cancelled"}
+            _log(task_id, op=step["op"], outcome="refused", error="wrong approval code")
+            return {"ok": False, "refused": "refused: wrong approval code (only the user has it)"}
+        else:
+            _STEPS.pop(step_id, None)
+            _DECIDED[step_id] = "used"
     return execute(step["token"], step["path"], step["op"], step["params"], confirmation, task_id)
