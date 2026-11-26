@@ -80,7 +80,8 @@ def test_manual_steps(repo):
 
 
 @pytest.mark.parametrize("sid", ["merge_conflict", "push_rejected", "detached_head", "no_upstream", "ci_test_failure",
-                                 "push_protection_secret", "big_files_staged", "auth_https_password"])
+                                 "push_protection_secret", "big_files_staged", "auth_https_password",
+                                 "rebase_dropped_commit", "ho_merge_conflict_two_files"])
 def test_e2e_oracle_passes(sid, tmp_path, monkeypatch):
     """The harness end to end, no LLM: the answer key's first fix must pass."""
     from eval import run_git_e2e as e2e

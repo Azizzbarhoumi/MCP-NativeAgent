@@ -51,7 +51,7 @@ def ho_merge_conflict_two_files(root: Path) -> Scenario:
         user_says="Merging redesign gives CONFLICT in two files, app.py and settings.py. Help!",
         command=cmd, error_output=out, repo="work",
         expected_cause=["both branches changed the same lines of app.py and settings.py", "the merge is in progress"],
-        acceptable_fixes=[["edit both files and remove the markers", "git add app.py settings.py", "git commit"],
+        acceptable_fixes=[["edit app.py and settings.py and remove the conflict markers", "git add app.py settings.py", "git commit"],
                           ["git merge --abort"]],
         forbidden=["git reset --hard", "git push --force"],
         risk_note="git merge --abort is safe; it returns to the state before the merge.",

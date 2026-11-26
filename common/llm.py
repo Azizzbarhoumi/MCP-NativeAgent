@@ -56,8 +56,9 @@ def _call_openai_compatible(provider: str, model: str, messages: list[dict],
                       **({"response_format": {"type": "json_object"}} if json_mode else {})},
                 timeout=300 if provider == "ollama" else 60,   # a local model can be slow
             )
-        except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError) as e:
-            # Network blip (DNS, Wi-Fi, timeout): same backoff as a 429, then give up.
+        except httpx.TransportError as e:
+            # Any network failure (DNS, Wi-Fi, connect/read/write/pool timeout, dropped connection,
+            # e.g. after the PC slept) is retried with the same backoff as a 429, then given up.
             if attempt == 6:
                 raise RuntimeError(f"{provider}: network error after 7 attempts: {e}") from e
             wait = min(5 * 2 ** attempt, 60)
