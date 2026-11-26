@@ -1046,3 +1046,43 @@ the benchmark branch's translator swapped in, that test fails, as it should. **3
 11 skipped.**
 
 **Next:** when the PC commits T1 and H1, replay them here and label the failures in the report.
+
+### Run 4, part 5: averaging fixes, and a first look at run B (23:20 to 23:45 Tunis)
+
+**Averaging (commit on `step/web-ui`):** `eval/average_runs.py` now does three things:
+- It keeps the tuned-only and held-out-only files of one setting in one block, so T1 to T3 and H1
+  to H3 come out as one "assistant" table with mean and min-max per column. Before, they were
+  two half-empty tables, and the empty halves pulled the cost averages down.
+- It shows the beginner score, overall and per item (Run 3 task 3).
+- It leaves replays out, since a replay reruns a recorded plan and would count one run twice.
+- **Tests:** 3 new. **344 passed, 11 skipped.**
+
+**Run B status (from the PC, read-only check at 23:20):**
+- B is at 14 of 31 questions.
+- The orchestrator restarted it at 23:18. Groq's daily window had stopped it at 22:48, with an
+  805 s wait, more than the 300 s the orchestrator will wait.
+- Nothing has been committed since 08c657c, because no job has finished yet.
+- B's settings match A: baseline, `v2_check_decomp`, Groq judge, k unset, gpt-oss-20b.
+
+**Provisional A vs B on those 14 questions** (a compact copy of B's rows, run through
+`compare_runs`; not saved as a result file):
+
+| type | n | A correct | B correct |
+|---|---|---|---|
+| lookup | 12 | 12/12 | 11/12 |
+| exact_match | 2 | 2/2 | 2/2 |
+| multi_hop | 0 | - | - |
+
+- **Verdict: within noise** (net -1, p = 1.00), and provisional.
+- **None of the 8 multi_hop questions have run yet**, and that's where decomposition is meant to
+  help.
+- **The one flip, lo07, looks like judge noise.** The decomposer did not split that question,
+  and B's answer opens with the same words as A's ("3 minutes (180 seconds)"). A was graded
+  correct and B partial. I only have the first 120 characters of B's answer, so I can't confirm
+  the rest matched.
+- **The decomposer split 3 lookup questions** (lo09, lo10, lo12), which it should leave whole.
+  The answers stayed correct, but it cost tokens: B used 23% more answer tokens per question
+  (4,398 vs 3,569) and took about 16 s longer per question.
+- **No wrong answers delivered** in either run.
+
+**Next:** the full verdict when B reaches 31/31.
