@@ -731,3 +731,51 @@ model:
   held-out sets. This checks the harness, not the assistant.
 - The B rows and the real assistant e2e rows come once the budget allows (see Task 1).
 
+
+## Run 3 (2026-11-26, from 12:08 Tunis): the local runner on your PC
+
+### What is running by itself
+- **Background script.** A detached script (`logs\orchestrator.log`) works through the
+  Groq-bound jobs one at a time: Phase 5 run B, then the e2e tuned set, then the held-out set.
+- **How it waits for budget.** Every 30 minutes it sends one small test call to gpt-oss-20b
+  and gpt-oss-120b. It starts a run only when both answer.
+- **How it resumes.** Every run uses `--resume` with its newest `.partial.jsonl`, so nothing
+  is skipped and nothing judged is lost.
+- **Why:** the free Groq tier gives gpt-oss-20b a daily token cap. Run B used it up after a
+  few questions. Every retry since this morning got a 429 with a wait of 8 to 10 minutes on
+  its very first call.
+- **Settings:** run B keeps exactly run A's settings (v2 prompt, checker on, Groq judge)
+  plus `--decompose`.
+
+### Task 5: oracle check on Windows (done)
+- `python -m eval.run_git_e2e --oracle` passes 25/25 on your PC, so the answer-key fix from
+  14a85ce works here too.
+- **Small oddity, not fixed yet:** in the oracle, `push_rejected` and
+  `ho_push_rejected_upstream` score tiers 2/3. So the answer key's own first fix disagrees
+  with its expected risk tiers on one step. This looks like an answer-key or grader issue,
+  not the assistant. I left it as it is, because `ho_push_rejected_upstream` is a held-out
+  scenario.
+
+### Task 6: approval button and PR description
+- **The approval page already exists and is on by default.** See Task 5 of run 2:
+  `approval_ui.py`, started by `server.py` unless `GIT_APPROVAL_UI=0`. Your new message
+  asks for "design, no wiring yet".
+- **I did not unwire it.** Removing working, tested code is your call.
+- **Decision for you:** keep it on, or default it off (`GIT_APPROVAL_UI=0`) until you've
+  reviewed it.
+- **PR description:** a short version with no AI footer is in `plan/PR_DESCRIPTION.md`.
+  `gh` isn't installed on this PC, so I couldn't update the PR text from here. Paste it into
+  PR #1.
+
+### Problems found on Windows this run
+- **Docker stopped twice** after the PC slept or came back, which took Qdrant down. One
+  eval run "answered" 0/31 because of it. The background script now runs
+  `docker compose up -d qdrant` and checks Qdrant before every start.
+- **Shell-launched runs died with the session.** A run started from my shell was killed when
+  the session restarted. Long runs are now started detached.
+
+### What's next
+- Run B, then the A-vs-B verdict.
+- The e2e tuned and held-out runs, with each failure labelled as assistant, grader or harness.
+- The beginner score from that run.
+- 2 to 3 averaged runs across days.
