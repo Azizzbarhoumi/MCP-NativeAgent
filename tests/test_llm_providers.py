@@ -49,3 +49,10 @@ def test_write_timeout_and_dropped_connection_are_retried(monkeypatch):
     monkeypatch.setattr(llm.time, "sleep", lambda s: None)
     assert llm.chat([{"role": "user", "content": "hi"}], task_id="t", provider="ollama", model="m") == "ok"
     assert errors == []
+
+
+def test_rate_limit_after_all_retries_is_resumable(monkeypatch):
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: FakeResp(429))
+    monkeypatch.setattr(llm.time, "sleep", lambda s: None)
+    with pytest.raises(llm.ProviderUnavailable):
+        llm.chat([{"role": "user", "content": "hi"}], task_id="t", provider="ollama", model="m")

@@ -2,6 +2,7 @@
 no LLM (the answer key's fix as the plan)."""
 
 import argparse
+import json
 
 import pytest
 
@@ -94,3 +95,41 @@ def test_e2e_oracle_passes(sid, tmp_path, monkeypatch):
     row = e2e.run_one(build, 0, argparse.Namespace(oracle=True, no_judge=True, dangerous="approve"), "t")
     assert row["passed"], (row["failure"], row["steps"])
     assert row["dangerous_without_backup"] == 0
+
+
+def test_e2e_stops_on_rate_limit_and_resumes(tmp_path, monkeypatch, capsys):
+    """A rate limit mid-run saves the finished scenarios and stops; --resume runs only the rest."""
+    import sys
+
+    from common import llm
+    from eval import run_git_e2e as e2e
+    from mcp_servers.git_local import execute
+    monkeypatch.setattr(e2e, "BUILD", tmp_path / "e2e")
+    monkeypatch.setattr(e2e, "EVAL", tmp_path)
+    (tmp_path / "results").mkdir()
+    monkeypatch.setattr(execute, "LOG", tmp_path / "exec.jsonl")
+    calls = []
+    real = e2e.run_one
+
+    def flaky(build, run, a, prefix):
+        calls.append(build.__name__)
+        if len(calls) == 2:
+            raise llm.ProviderUnavailable("still rate-limited")
+        return real(build, run, a, prefix)
+
+    monkeypatch.setattr(e2e, "run_one", flaky)
+    only = "merge_conflict,no_upstream,detached_head"
+    monkeypatch.setattr(sys, "argv", ["x", "--oracle", "--only", only])
+    with pytest.raises(SystemExit) as stop:
+        e2e.main()
+    assert "nothing lost, 1 done" in str(stop.value)
+    partial = next((tmp_path / "results").glob("*.partial.jsonl"))
+    assert len(partial.read_text().splitlines()) == 1
+
+    calls.clear()
+    monkeypatch.setattr(e2e, "run_one", real)
+    monkeypatch.setattr(sys, "argv", ["x", "--oracle", "--only", only, "--resume", str(partial)])
+    e2e.main()
+    final = json.loads(next((tmp_path / "results").glob("git_e2e_oracle_*.json")).read_text())
+    assert sorted(r["id"] for r in final["rows"]) == sorted(only.split(","))
+    assert all(r["passed"] for r in final["rows"])

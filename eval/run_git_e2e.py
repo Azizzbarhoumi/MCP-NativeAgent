@@ -26,6 +26,7 @@ import os
 import re
 import shutil
 import stat
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -211,7 +212,7 @@ def run_one(build, run: int, a, task_prefix: str) -> dict:
     try:
         ans = oracle_plan(key) if a.oracle else diagnose(
             str(work), key["user_says"], key["command"], key["error_output"], task_id)
-    except llm.ProviderAccessError:
+    except (llm.ProviderAccessError, llm.ProviderUnavailable):
         raise
     except Exception as e:
         ans = {"cause": "", "explanation": "", "steps": [], "warnings": [], "parsed": False, "error": str(e)}
@@ -229,7 +230,7 @@ def run_one(build, run: int, a, task_prefix: str) -> dict:
     else:
         try:
             verdict, graded = judge(key, ans, rub, task_id)
-        except llm.ProviderAccessError:
+        except (llm.ProviderAccessError, llm.ProviderUnavailable):
             raise
         except Exception as e:
             verdict, graded = {"diagnosis": "error", "reason": f"judge error: {e}"}, []
@@ -314,6 +315,7 @@ def main() -> None:
     ap.add_argument("--set", choices=["all", "tuned", "held_out"], default="all")
     ap.add_argument("--oracle", action="store_true", help="no LLM: run the answer key's first fix")
     ap.add_argument("--no-judge", action="store_true")
+    ap.add_argument("--resume", help="a .partial.jsonl from a run that stopped: keep its rows, run the rest")
     ap.add_argument("--dangerous", choices=["approve", "refuse"], default="approve",
                     help="approval policy for dangerous steps (approve = the user types the confirmation phrase)")
     a = ap.parse_args()
@@ -330,14 +332,28 @@ def main() -> None:
     tag = ("oracle" if a.oracle else "assistant") + ("" if a.set == "all" else f"_{a.set}") + (f"_x{a.runs}" if a.runs > 1 else "")
     answer_model = "none (oracle)" if a.oracle else f"{settings.llm_provider}/{settings.llm_model}"
     print(f"{len(builds)} scenarios x {a.runs} run(s), answer model {answer_model}, dangerous={a.dangerous}\n")
-    rows = []
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Every finished scenario is appended here at once, so a rate limit, a crash or a sleeping
+    # PC never loses the scenarios already run; --resume continues from this file.
+    partial = Path(a.resume) if a.resume else EVAL / "results" / f"git_e2e_{tag}_{stamp}.partial.jsonl"
+    rows = [json.loads(l) for l in partial.read_text(encoding="utf-8").splitlines() if l.strip()] if a.resume else []
+    done = {(r["id"], r["run"]) for r in rows}
+    if rows:
+        print(f"resuming from {partial}: {len(rows)} scenario run(s) already done\n")
     for run in range(a.runs):
         for b in builds:
+            if (b.__name__, run) in done:
+                continue
             try:
                 r = run_one(b, run, a, f"e2e-r{run}")
             except llm.ProviderAccessError as e:
                 raise SystemExit(f"stopping: {e}")
+            except llm.ProviderUnavailable as e:
+                raise SystemExit(f"stopping (nothing lost, {len(rows)} done): {e}\n"
+                                 f"resume later with: python -m eval.run_git_e2e {' '.join(sys.argv[1:]).replace(f'--resume {a.resume}', '').strip()} --resume {partial}")
             rows.append(r)
+            with partial.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(r, default=str) + "\n")
             f = r["failure"]
             print(f"r{run} {r['id']:32} {'PASS' if r['passed'] else 'FAIL'}  diag={r['diagnosis']:9} state={r['state']['passed']!s:5} "
                   f"inv={sum(c['ok'] for c in r['invariants']['checks'])}/8 rubric={r['rubric_score']:5} "
@@ -347,9 +363,9 @@ def main() -> None:
     summary = {"tag": tag, "answer_model": answer_model, "judge": "none" if (a.oracle or a.no_judge) else
                f"groq/{os.environ.get('GROQ_JUDGE_MODEL') or settings.groq_judge_model}", "runs": a.runs,
                "dangerous_policy": a.dangerous, "tuned": summarize(tuned), "held_out": summarize(held)}
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     out = EVAL / "results" / f"git_e2e_{tag}_{stamp}"
     out.with_suffix(".json").write_text(json.dumps({"summary": summary, "rows": rows}, indent=2, default=str), encoding="utf-8")
+    partial.unlink(missing_ok=True)       # the final file now holds every row
 
     keys = list(summary["tuned"])
     lines = [f"# Git assistant, end to end: {tag}", "",

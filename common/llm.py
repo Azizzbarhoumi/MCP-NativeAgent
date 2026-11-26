@@ -26,6 +26,11 @@ TOKENS: dict[str, int] = {}
 # Per task_id: one (agent, provider, model, prompt_tokens, completion_tokens) per call, for cost.
 USAGE: dict[str, list[tuple]] = {}
 
+class ProviderUnavailable(RuntimeError):
+    """Still rate-limited (429) or unreachable after every retry. The run can resume later,
+    so long benchmarks save what they have and stop instead of recording a failure."""
+
+
 class ProviderAccessError(RuntimeError):
     """401/402/403: bad key, no budget or no access. Retrying or moving on to the next
     question cannot help, so callers should stop the run."""
@@ -60,7 +65,7 @@ def _call_openai_compatible(provider: str, model: str, messages: list[dict],
             # Any network failure (DNS, Wi-Fi, connect/read/write/pool timeout, dropped connection,
             # e.g. after the PC slept) is retried with the same backoff as a 429, then given up.
             if attempt == 6:
-                raise RuntimeError(f"{provider}: network error after 7 attempts: {e}") from e
+                raise ProviderUnavailable(f"{provider}: network error after 7 attempts: {e}") from e
             wait = min(5 * 2 ** attempt, 60)
             print(f"[llm] network error from {provider} ({type(e).__name__}), retrying in {wait}s (attempt {attempt + 1}/7)")
             time.sleep(wait)
@@ -70,6 +75,8 @@ def _call_openai_compatible(provider: str, model: str, messages: list[dict],
         wait = float(resp.headers.get("retry-after", min(5 * 2 ** attempt, 60)))
         print(f"[llm] {resp.status_code} from {provider}, retrying in {wait:.0f}s (attempt {attempt + 1}/7)")
         time.sleep(wait)
+    if resp.status_code == 429:
+        raise ProviderUnavailable(f"{provider}: still rate-limited (429) after 7 attempts")
     if resp.status_code in (401, 402, 403):
         raise ProviderAccessError(f"{provider} HTTP {resp.status_code}: {resp.text[:300]}")
     if resp.status_code >= 400:
