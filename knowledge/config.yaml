@@ -17,7 +17,7 @@ chunking:
 
 retrieval:
   k: 5
-  # Diversity cap per collection (dev_docs is left alone so its benchmark stays comparable).
-  # git_docs: user-manual.adoc is ~10% of the corpus and crowded out git-stash / git-reflog.
-  max_per_doc:
-    git_docs: 2
+  # Optional diversity cap per collection, e.g. {git_docs: 2}. Off: on 2026-11-26 a cap of 2
+  # changed no retrieval probe result (the 2 misses stayed misses), so it is not worth an
+  # unmeasured change to what the assistant reads.
+  max_per_doc: {}

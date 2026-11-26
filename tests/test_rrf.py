@@ -46,4 +46,4 @@ def test_cap_per_doc_keeps_order_and_limits_one_document():
 def test_dev_docs_has_no_cap_so_its_benchmark_is_unchanged():
     from knowledge.config import load_config
     cfg = load_config()
-    assert "dev_docs" not in cfg.retrieval.max_per_doc and cfg.retrieval.max_per_doc.get("git_docs") == 2
+    assert "dev_docs" not in cfg.retrieval.max_per_doc
