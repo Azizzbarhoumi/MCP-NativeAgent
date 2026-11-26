@@ -15,7 +15,7 @@ from pathlib import Path
 import yaml
 
 RUBRICS = Path(__file__).resolve().parent / "rubrics"
-TYPES = {"llm", "regex_none", "regex_any"}
+TYPES = {"llm", "regex_none", "regex_any", "every_step_why"}
 
 JUDGE_PROMPT = """You check a git assistant's answer against rubric items. For each item,
 decide strictly whether the answer satisfies it. Return JSON only:
@@ -50,7 +50,10 @@ def load(scenario_id: str, folder: Path = RUBRICS) -> dict:
             raise RubricError(f"{path.name}: missing or duplicate id {it.get('id')!r}")
         if not str(it.get("text", "")).strip():
             raise RubricError(f"{path.name}: item {it['id']} has no text")
-        if it["type"] != "llm":
+        if it["type"] == "every_step_why":
+            if not isinstance(it.get("min_words"), int) or it["min_words"] < 1:
+                raise RubricError(f"{path.name}: item {it['id']} needs min_words >= 1")
+        elif it["type"] != "llm":
             try:
                 re.compile(it.get("pattern", ""))
             except re.error as e:
@@ -77,6 +80,12 @@ def grade(ans: dict, rubric: dict, judge_fn, verdicts: dict | None = None) -> li
         if it["type"] == "regex_none":
             hits = [c for c in commands if re.search(it["pattern"], c)]
             results[it["id"]] = {"ok": not hits, "why": f"matched: {hits[0][:80]}" if hits else "no match"}
+        elif it["type"] == "every_step_why":
+            short = [s["command"] for s in ans.get("steps", []) if s.get("command")
+                     and len(str(s.get("why", "")).split()) < it["min_words"]]
+            ok = bool(commands) and not short
+            results[it["id"]] = {"ok": ok, "why": f"too short or missing for: {short[0][:60]}" if short
+                                 else "no command proposed" if not commands else "every command explained"}
         elif it["type"] == "regex_any":
             ok = bool(re.search(it["pattern"], _answer_text(ans), re.I))
             results[it["id"]] = {"ok": ok, "why": "found" if ok else "not found"}

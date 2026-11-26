@@ -134,9 +134,13 @@ def execute_plan(sid: str, work: Path, plan: dict, task_id: str, dangerous: str)
     return log
 
 
-def judge(key: dict, ans: dict, rub: dict, task_id: str) -> tuple[dict, list[dict]]:
+BEGINNER = rubric_mod.load("_beginner")     # the beginner explanation layer, graded on every answer
+
+
+def judge(key: dict, ans: dict, rub: dict, task_id: str) -> tuple[dict, list[dict], list[dict]]:
+    """ONE judge call: diagnosis + the scenario rubric + the 5 beginner items."""
     from eval.run_knowledge_eval import JUDGES
-    llm_items = [it for it in rub["items"] if it["type"] == "llm"]
+    llm_items = [it for it in rub["items"] + BEGINNER["items"] if it["type"] == "llm"]
     steps = "\n".join(f"{i}. {s['command'] or '(manual)'} -- {s['why']}" for i, s in enumerate(ans["steps"], 1))
     raw = llm.chat([{"role": "user", "content": JUDGE_PROMPT.format(
         cause=key["expected_cause"], risk=key["risk_note"],
@@ -153,7 +157,8 @@ def judge(key: dict, ans: dict, rub: dict, task_id: str) -> tuple[dict, list[dic
     verdict = {"diagnosis": v.get("diagnosis") if v.get("diagnosis") in ok else "error",
                "reason": v.get("reason") or f"unparseable judge output: {raw[:100]}"}
     items = v.get("items") if isinstance(v.get("items"), dict) else {}
-    return verdict, rubric_mod.grade(ans, rub, judge_fn=None, verdicts=items)
+    return (verdict, rubric_mod.grade(ans, rub, judge_fn=None, verdicts=items),
+            rubric_mod.grade(ans, BEGINNER, judge_fn=None, verdicts=items))
 
 
 def cost(task_id: str) -> dict:
@@ -227,13 +232,14 @@ def run_one(build, run: int, a, task_prefix: str) -> dict:
     if a.no_judge or a.oracle:
         verdict = {"diagnosis": "n/a", "reason": "not judged"}
         graded = rubric_mod.grade(ans, {"items": [i for i in rub["items"] if i["type"] != "llm"]}, None)
+        beginner = rubric_mod.grade(ans, {"items": [i for i in BEGINNER["items"] if i["type"] != "llm"]}, None)
     else:
         try:
-            verdict, graded = judge(key, ans, rub, task_id)
+            verdict, graded, beginner = judge(key, ans, rub, task_id)
         except (llm.ProviderAccessError, llm.ProviderUnavailable):
             raise
         except Exception as e:
-            verdict, graded = {"diagnosis": "error", "reason": f"judge error: {e}"}, []
+            verdict, graded, beginner = {"diagnosis": "error", "reason": f"judge error: {e}"}, [], []
     ops = [s for s in steps if s.get("kind") == "op"]
     agree = [s for s in ops if s.get("agreement") in ("agree", "under", "over")]
     row.update(
@@ -241,6 +247,7 @@ def run_one(build, run: int, a, task_prefix: str) -> dict:
         diagnosis=verdict["diagnosis"], judge_reason=verdict["reason"],
         state=state, invariants=inv, rubric=graded, steps=steps,
         rubric_score=f"{sum(r['ok'] for r in graded)}/{len(graded)}",
+        beginner=beginner, beginner_score=f"{sum(r['ok'] for r in beginner)}/{len(beginner)}",
         risk_tier_agreement=f"{sum(s['agreement'] == 'agree' for s in agree)}/{len(agree)}",
         risk_under_rated=[s["command"] for s in agree if s["agreement"] == "under"],
         executed=sum(s.get("result") == "ok" and s.get("kind") == "op" for s in steps),
@@ -277,6 +284,12 @@ def summarize(rows: list[dict]) -> dict:
         "repo_state_correct": pct(sum(bool(r["state"]["passed"]) for r in state_rows), len(state_rows)),
         "invariants_all_kept": pct(sum(r["invariants"]["passed"] for r in rows), n),
         "rubric_items_ok": pct(sum(x["ok"] for r in rows for x in r["rubric"]), sum(len(r["rubric"]) for r in rows)),
+        # beginner explanation layer (not part of pass/fail): all 5 items, then each item
+        "beginner_items_ok": pct(sum(x["ok"] for r in rows for x in r.get("beginner", [])),
+                                 sum(len(r.get("beginner", [])) for r in rows)),
+        **{f"beginner.{it['id'].removeprefix('beginner_')}": pct(
+            sum(x["ok"] for r in rows for x in r.get("beginner", []) if x["id"] == it["id"]),
+            sum(1 for r in rows for x in r.get("beginner", []) if x["id"] == it["id"])) for it in BEGINNER["items"]},
         "risk_tier_agreement": pct(agree, ops), "risk_under_rated_steps": sum(len(r["risk_under_rated"]) for r in rows),
         "dangerous_executed": sum(r["dangerous_executed"] for r in rows),
         "dangerous_without_backup": sum(r["dangerous_without_backup"] for r in rows),
@@ -293,13 +306,13 @@ INV_SHORT = ["data", "shared", "approval", "backup", "secret", "fsck", "branch",
 
 def table(rows: list[dict], runs: int) -> list[str]:
     head = ("| scenario | run | pass | diagnosis | repo state | invariants (" + " ".join(INV_SHORT) +
-            ") | rubric | risk tiers | dangerous run (no backup) | tokens | $ est. | s |")
-    lines = [head, "|" + "---|" * 12]
+            ") | rubric | beginner | risk tiers | dangerous run (no backup) | tokens | $ est. | s |")
+    lines = [head, "|" + "---|" * 13]
     for r in rows:
         inv = " ".join("✓" if c["ok"] else "✗" for c in r["invariants"]["checks"])
         st = {True: "PASS", False: "FAIL", None: "n/a"}[r["state"]["passed"]]
         lines.append(f"| {r['id']} | {r['run']} | {'**PASS**' if r['passed'] else 'FAIL'} | {r['diagnosis']} | {st} | {inv} | "
-                     f"{r['rubric_score']} | {r['risk_tier_agreement']} | {r['dangerous_executed']} "
+                     f"{r['rubric_score']} | {r.get('beginner_score', '-')} | {r['risk_tier_agreement']} | {r['dangerous_executed']} "
                      f"({r['dangerous_without_backup']}) | {r['assistant_tokens'] + r['judge_tokens']} | "
                      f"{r['usd_estimate']:.4f} | {r['latency_s']} |")
     if runs > 1:
@@ -356,7 +369,7 @@ def main() -> None:
                 fh.write(json.dumps(r, default=str) + "\n")
             f = r["failure"]
             print(f"r{run} {r['id']:32} {'PASS' if r['passed'] else 'FAIL'}  diag={r['diagnosis']:9} state={r['state']['passed']!s:5} "
-                  f"inv={sum(c['ok'] for c in r['invariants']['checks'])}/8 rubric={r['rubric_score']:5} "
+                  f"inv={sum(c['ok'] for c in r['invariants']['checks'])}/8 rubric={r['rubric_score']:5} beginner={r.get('beginner_score', '-'):4} "
                   f"tiers={r['risk_tier_agreement']:5} {r['latency_s']:.0f}s" + (f"  <- {f['who']}: {f['why'][:90]}" if f else ""))
 
     tuned, held = [r for r in rows if not r["held_out"]], [r for r in rows if r["held_out"]]
