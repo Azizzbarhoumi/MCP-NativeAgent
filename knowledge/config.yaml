@@ -17,3 +17,7 @@ chunking:
 
 retrieval:
   k: 5
+  # Diversity cap per collection (dev_docs is left alone so its benchmark stays comparable).
+  # git_docs: user-manual.adoc is ~10% of the corpus and crowded out git-stash / git-reflog.
+  max_per_doc:
+    git_docs: 2

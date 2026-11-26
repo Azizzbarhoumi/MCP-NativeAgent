@@ -74,16 +74,34 @@ def rrf_merge(ranked_lists: list[list[Hit]], k: int, rrf_k: int = RRF_K) -> list
     return [first_seen[cid].model_copy(update={"score": scores[cid]}) for cid in best]
 
 
+def cap_per_doc(hits: list[Hit], per_doc: int, k: int) -> list[Hit]:
+    """Keep the ranking, but at most `per_doc` chunks from any one document, then the top k."""
+    seen: dict[tuple, int] = {}
+    out = []
+    for h in hits:
+        key = (h.source, h.path)
+        if seen.get(key, 0) < per_doc:
+            seen[key] = seen.get(key, 0) + 1
+            out.append(h)
+            if len(out) == k:
+                break
+    return out
+
+
 def search(question: str, k: int | None = None, collection: str | None = None,
            mode: str = "baseline") -> list[Hit]:
     cfg = load_config()
     k, collection = k or cfg.retrieval.k, collection or cfg.collection
+    per_doc = cfg.retrieval.max_per_doc.get(collection)
+    n = CANDIDATES if per_doc else k            # fetch more when some may be dropped by the cap
     if mode == "baseline":
-        return dense_search(question, k, collection)
-    if mode == "hybrid":
-        return rrf_merge([dense_search(question, CANDIDATES, collection),
-                          sparse_search(question, CANDIDATES, collection)], k)
-    raise ValueError(f"unknown retrieval mode {mode!r}")
+        hits = dense_search(question, n, collection)
+    elif mode == "hybrid":
+        hits = rrf_merge([dense_search(question, CANDIDATES, collection),
+                          sparse_search(question, CANDIDATES, collection)], n)
+    else:
+        raise ValueError(f"unknown retrieval mode {mode!r}")
+    return cap_per_doc(hits, per_doc, k) if per_doc else hits
 
 
 def round_robin(ranked_lists: list[list[Hit]], limit: int) -> list[Hit]:
