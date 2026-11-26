@@ -67,8 +67,10 @@ def _answer_text(ans: dict) -> str:
                      *ans.get("warnings", [])])
 
 
-def grade(ans: dict, rubric: dict, judge_fn) -> list[dict]:
-    """judge_fn(prompt) -> raw text. Returns one result per item, in rubric order."""
+def grade(ans: dict, rubric: dict, judge_fn, verdicts: dict | None = None) -> list[dict]:
+    """judge_fn(prompt) -> raw text. Returns one result per item, in rubric order.
+    `verdicts` ({item id: {"ok", "why"}}) skips the judge call when another call already
+    graded the llm items (the end-to-end benchmark grades diagnosis and rubric together)."""
     results, llm_items = {}, [it for it in rubric["items"] if it["type"] == "llm"]
     commands = [s["command"] for s in ans.get("steps", []) if s.get("command")]
     for it in rubric["items"]:
@@ -78,7 +80,12 @@ def grade(ans: dict, rubric: dict, judge_fn) -> list[dict]:
         elif it["type"] == "regex_any":
             ok = bool(re.search(it["pattern"], _answer_text(ans), re.I))
             results[it["id"]] = {"ok": ok, "why": "found" if ok else "not found"}
-    if llm_items:
+    if llm_items and verdicts is not None:
+        for it in llm_items:
+            v = verdicts.get(it["id"])
+            results[it["id"]] = ({"ok": bool(v.get("ok")), "why": str(v.get("why", ""))} if isinstance(v, dict)
+                                 else {"ok": False, "why": "judge gave no verdict for this item"})
+    elif llm_items:
         steps = "\n".join(f"{i}. {s['command'] or '(manual)'} -- {s.get('why', '')}" for i, s in enumerate(ans.get("steps", []), 1))
         raw = judge_fn(JUDGE_PROMPT.format(
             items="\n".join(f"- {it['id']}: {it['text']}" for it in llm_items),

@@ -23,6 +23,8 @@ PROVIDERS = {
 
 # Running token count per task_id (prompt + completion), read by the eval harness.
 TOKENS: dict[str, int] = {}
+# Per task_id: one (agent, provider, model, prompt_tokens, completion_tokens) per call, for cost.
+USAGE: dict[str, list[tuple]] = {}
 
 class ProviderAccessError(RuntimeError):
     """401/402/403: bad key, no budget or no access. Retrying or moving on to the next
@@ -96,6 +98,8 @@ def chat(
     text, usage = _call_openai_compatible(provider, model, messages, temperature, json_mode)
 
     TOKENS[task_id] = TOKENS.get(task_id, 0) + (usage.get("total_tokens") or 0)
+    USAGE.setdefault(task_id, []).append((agent, provider, model, usage.get("prompt_tokens") or 0,
+                                          usage.get("completion_tokens") or 0))
     if gen:
         gen.end(
             output=text,
