@@ -185,6 +185,7 @@ def main() -> None:
             root.mkdir(parents=True)
             key = build(root)
             row["grading"] = key.grading
+            row["held_out"], row["category"] = key.held_out, key.category
             snap = snapshot(root, key.repo)
             task_id = f"state-check-{variant}-{sid}"
             if variant == "bad" and sid in SETUP_BAD:
@@ -216,14 +217,14 @@ def main() -> None:
     for r in [r for r in rows if r["grading"] == "state"]:
         failed = "; ".join(c["check"] for c in r["bad"]["checks"] if not c["ok"])
         blocked = [s["result"] for s in r["bad"]["steps"] if s["result"] != "ok"]
-        lines.append(f"| {r['id']} | {fmt(r['broken']['passed'])} | {fmt(r['reference']['passed'])} | "
+        lines.append(f"| {r['id']}{' (held-out)' if r.get('held_out') else ''} | {fmt(r['broken']['passed'])} | {fmt(r['reference']['passed'])} | "
                      f"{fmt(r['bad']['passed'])} | {r['bad_label']} | {failed or '-'}{' / ' + blocked[0][:80] if blocked else ''} |")
     state_rows = [r for r in rows if r["grading"] == "state"]
     lines += ["", f"Repo state correct after the reference fix: {sum(r['reference']['passed'] for r in state_rows)}/{len(state_rows)}; "
               f"after the beginner mistake: {sum(r['bad']['passed'] for r in state_rows)}/{len(state_rows)}", "",
               "Rubric scenarios (graded on the answer, see rubrics/; not counted in the repo-state rate):", ""]
     for r in [r for r in rows if r["grading"] == "rubric"]:
-        lines.append(f"- {r['id']}: no repo check. Credential invariant: broken repo "
+        lines.append(f"- {r['id']}: no repo check. All invariants: broken repo "
                      f"{'ok' if r['broken']['invariants']['passed'] else 'BROKEN'}, after the mistake "
                      f"({r['bad_label']}) {'ok' if r['bad']['invariants']['passed'] else 'BROKEN'}.")
     lines += ["", "Invariants, summary (the reference fix must keep all of them):", "",
