@@ -281,3 +281,91 @@ so the new checks don't break the scenarios.
 
 **Decision for you (morning).** The approval code is shown on the MCP server's stderr and in
 `logs/approvals.log`. When you wire the Action agent, a UI button should replace that.
+
+### Phase 6: Git/GitHub docs collection (retrieval test added)
+
+**What was already there.** The `git_docs` collection was built before tonight. It has three
+sources: the official git docs (45 pages, GPL-2.0), GitHub Docs (60 pages, CC BY 4.0) and Pro Git
+(43 sections, CC BY-NC-SA 3.0). They use fastembed with `BAAI/bge-small-en-v1.5` plus BM25. Your
+PC's Qdrant has 1,543 points. Ingest is
+`python -m knowledge.acquire --collection git_docs` then `python -m knowledge.ingest --collection git_docs`.
+The manifest keeps the license and attribution for each source, and the raw docs stay git-ignored.
+
+**What I added:** `tests/test_git_docs_retrieval.py`.
+- **Offline checks (always run):** the manifest has exactly the three git sources, each with a
+  license, an attribution and a commit. No source folder points into `eval/`, and the ingestion
+  guard refuses eval paths.
+- **Live checks (skip unless Qdrant, `git_docs` and the embedding model are available):**
+  - The collection holds only the three git sources, and no point comes from `eval/`.
+  - 10 beginner questions I wrote must find the right page in the top 5 with hybrid search.
+    Examples: "undo my last commit but keep the changes", "Permission denied (publickey)" and
+    "push a new branch and set its upstream". They are new questions, not taken from the
+    benchmark. A miss counts as a real retrieval miss, and the expected pages must not be
+    loosened to make it pass.
+
+**Why in plain words.** Ingestion can succeed and still retrieve the wrong pages. A small set of
+known questions with known answers catches that, much like a unit test for search.
+
+**Results.**
+- Here: 2 passed, 11 skipped. This container can't download the embedding model (HuggingFace is
+  blocked), so the live part can't run here.
+- Your PC: the live part runs there. It is in the morning command list below.
+
+**Decision.** I didn't re-ingest. The collection on your PC is already complete, and re-ingesting
+would only change point ids.
+
+### Phase 7: graph viewer with troubleshooting chains (done, screenshots taken)
+
+**What I built.** The viewer now has a **Troubleshooting chains** view for `git_docs`. It is the
+default view when chains exist. Each chain reads left to right:
+
+`repo state → error message → cause → command → concept → doc section`
+
+For example: "Files with conflict markers" → "CONFLICT (content): Merge conflict in app.py" →
+"Both branches changed the same lines" → `git add app.py` → "Merge conflicts" → *Pro Git, Basic
+Merge Conflicts* and *git-merge, TRUE MERGE*.
+
+- **Source of the chains:** `knowledge/playbooks/git_errors.yaml`, written by hand from general Git
+  knowledge. It is **not** built from the benchmark, and I wrote it without looking at the
+  held-out scenarios. It covers 11 errors, 13 causes, 30 commands, 19 concepts and 11 repo states.
+- **Risk tiers:** these are **not hand-written**. Each command gets its tier from
+  `mcp_servers/git_local/risk.py`, the same rules the assistant uses, so the viewer and the
+  assistant can't disagree. The viewer shows the tier as a coloured ring (green safe, amber
+  careful, red destructive, grey manual). Result: 14 safe, 7 careful, 1 destructive, 8 manual.
+- **Doc links:** a concept links to a real section of the corpus by file path and heading. Example:
+  `git-checkout.adoc#DETACHED HEAD`. A link that isn't found is reported, never invented. With
+  the corpus downloaded, all 37 links resolve.
+- **Viewer:**
+  - Pick one error to see only its chain. A command shared by several errors, like
+    `git status`, shows only the concepts that error declared.
+  - Click a node to see its details, including the tier and the reason.
+  - The layout is a fixed column layout instead of physics, so labels don't overlap.
+  - `#chain=merge_conflict` in the URL opens one chain directly.
+  - The old documentation graph is still there under View → Documentation graph.
+- **JSON and API:**
+  - `python -m knowledge.graph.export --collection git_docs --json g.json` now includes the
+    chain nodes.
+  - `--chains-json c.json` writes only the chains.
+  - The API has a new `GET /chains?error=merge_conflict` endpoint.
+  - No Neo4j is used.
+
+**Screenshots:**
+- `docs/screenshots/graph_chains_all.png`: all chains.
+- `docs/screenshots/graph_chain_merge_conflict.png`: one chain, with `git merge --abort` selected.
+- `docs/screenshots/graph_docs_view.png`: the old documentation view, still working.
+
+They were taken with Playwright here, after downloading the corpus into the git-ignored
+`knowledge/corpus/`. The doc commits here are a few days newer than the ones on your PC, which
+doesn't matter for the viewer.
+
+**Files:**
+- New: `knowledge/playbooks/git_errors.yaml`, `knowledge/graph/troubleshoot.py`,
+  `tests/test_troubleshoot_graph.py` (9 tests).
+- Changed: `knowledge/graph/export.py`, `api.py`, `viewer/template.html` and `README.md`.
+
+**Test results:** the full suite has **244 passed, 11 skipped**. The skips are the live retrieval
+tests, which need your PC's Qdrant.
+
+**Decision for you (morning).** Should the playbook also go into the knowledge base, so the
+assistant can cite it? I didn't do that. It is my own writing rather than a licensed doc, and
+indexing it would change the knowledge benchmark.
