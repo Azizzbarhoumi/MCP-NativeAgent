@@ -9,9 +9,9 @@ and a step id; execute_step runs it only with the user's approval code (plus the
 phrase for dangerous steps). There is no tool that runs raw commands.
 
 Approval: the model never sees the approval token. prepare_step returns a step_id. The human
-approves on a local approval page (approval_ui.py; its secret address goes to this process's
-stderr and logs/approvals.log, never to the model) or gives the model the approval code shown
-there. execute_step runs a step only after one of the two. In-process agent code can still use
+gives the model the approval code that this process prints to stderr and logs/approvals.log
+(never to the model). With GIT_APPROVAL_UI=1 they can instead approve on a local approval page
+(approval_ui.py, off by default; its secret address goes to the same two places). execute_step runs a step only after one of the two. In-process agent code can still use
 execute.prepare/execute directly and hold the token itself.
 """
 
@@ -106,7 +106,7 @@ def execute_step(step_id: str, approval_code: str | None = None, confirmation: s
 
 
 if __name__ == "__main__":
-    if os.environ.get("GIT_APPROVAL_UI", "1") != "0":
+    if os.environ.get("GIT_APPROVAL_UI", "0") == "1":      # off until the page design is reviewed
         from mcp_servers.git_local import approval_ui
         approval_ui.start(int(os.environ.get("GIT_APPROVAL_UI_PORT", "0")))
     mcp.run()

@@ -456,6 +456,7 @@ def execute(token: str, path: str, op: str, params: dict | None, confirmation: s
 #                      Three wrong codes cancel the step.
 
 APPROVALS_LOG = LOG.with_name("approvals.log")
+APPROVAL_PAGE = False      # set by approval_ui.start(); off by default until the page is reviewed
 _STEPS: dict[str, dict] = {}
 _DECIDED: dict[str, str] = {}          # step id -> "rejected" / "cancelled" / "used", for step_status
 MAX_CODE_ATTEMPTS = 3
@@ -487,9 +488,13 @@ def prepare_for_model(path: str, op: str, params: dict | None, task_id: str = "-
                                      "created": datetime.now(timezone.utc).isoformat(timespec="seconds")},
                            "approved": False, "confirmation": None}
     _show_code_to_human(step_id, p["command"], p["tier"], code)
-    p.update(step_id=step_id, approval="Show this step to the user and wait. They approve it on their git-local "
-                                       "approval page (then call execute_step with the step_id only), or they "
-                                       "type you the approval code from that page.")
+    if APPROVAL_PAGE:
+        how = ("They approve it on their git-local approval page (then call execute_step with the step_id "
+               "only), or they type you the approval code from that page.")
+    else:
+        how = ("They type you the approval code that git-local showed them (in its console and "
+               "logs/approvals.log); then call execute_step with the step_id and that code.")
+    p.update(step_id=step_id, approval="Show this step to the user and wait. " + how)
     return p
 
 

@@ -147,3 +147,18 @@ def test_mcp_tools_expose_status_but_no_approval_function():
     assert "step_status" in names and "execute_step" in names
     assert not {"approve_by_human", "reject_by_human", "pending_for_human"} & names
     assert inspect.signature(server.execute_step).parameters["approval_code"].default is None
+
+
+def test_page_is_off_by_default_and_the_model_is_not_told_about_it(repo, monkeypatch):
+    monkeypatch.setattr(ex, "_STEPS", {})
+    src = inspect.getsource(__import__("mcp_servers.git_local.server", fromlist=["x"]))
+    assert 'os.environ.get("GIT_APPROVAL_UI", "0") == "1"' in src          # opt-in only
+    assert ex.APPROVAL_PAGE is False
+    p = ex.prepare_for_model(str(repo), "create_branch", {"name": "off"})
+    assert "page" not in p["approval"] and "approval code" in p["approval"]
+    url = ui.start(0)
+    try:
+        assert "approval page" in ex.prepare_for_model(str(repo), "create_branch", {"name": "on"})["approval"]
+    finally:
+        ui.stop()
+    assert ex.APPROVAL_PAGE is False and url

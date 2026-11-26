@@ -15,7 +15,9 @@ Why it is safe:
   none (stops other websites from submitting the form).
 - Dangerous steps need the confirmation phrase typed on the page.
 
-Start:  started by server.py unless GIT_APPROVAL_UI=0; GIT_APPROVAL_UI_PORT picks a port.
+Start:  OFF by default (design under review, see docs/approval_page.md). GIT_APPROVAL_UI=1 makes
+        server.py start it; GIT_APPROVAL_UI_PORT picks a port. Off, approval works as before: the
+        code goes to stderr and logs/approvals.log, and the user types it to the assistant.
 """
 
 import html
@@ -147,6 +149,7 @@ def start(port: int = 0) -> str:
     real_port = _server.server_address[1]
     handler.allowed_hosts = {f"127.0.0.1:{real_port}", f"localhost:{real_port}"}
     handler.allowed_origins = {f"http://{h}" for h in handler.allowed_hosts}
+    ex.APPROVAL_PAGE = True
     threading.Thread(target=_server.serve_forever, daemon=True, name="git-approval-ui").start()
     _url = f"http://127.0.0.1:{real_port}/{secret}/"
     line = f"[git-local] approval page: {_url}"
@@ -163,3 +166,4 @@ def stop() -> None:
         _server.shutdown()
         _server.server_close()
     _server, _url = None, None
+    ex.APPROVAL_PAGE = False

@@ -13,12 +13,14 @@
 - **Query decomposition** (Phase 5): an optional `--decompose` flag.
 - **`git_docs` collection** (Phase 6): Pro Git, git docs and GitHub docs, embedded with fastembed.
 - **Graph viewer** (Phase 7): error → cause → command → concept → doc chains.
-- **Approval page**: a local page where you approve a step with its code. The code never
-  reaches the model.
+- **Approval page (prototype, off by default)**: a local page where you approve a step with
+  one click. The code and the page address never reach the model. Design for review:
+  `docs/approval_page.md`. It is enabled with `GIT_APPROVAL_UI=1`.
 - **Beginner rubric**: 5 plain-language items, reported next to pass/fail.
 
 **Honest results so far** (answer model Groq gpt-oss-20b, judge gpt-oss-120b)
-- **Tests on Windows:** 272 passed, 2 failed, 1 skipped. The 2 failures are real
+- **Tests:** 273 passed, 11 skipped (in the cloud, without Qdrant). On Windows, with
+  Qdrant: all pass except 2. The 2 failures are real
   `git_docs` retrieval misses (stash and reflog questions). The tests were kept strict.
 - **Oracle e2e:** 25/25 PASS.
 - **Knowledge eval, run A** (v2 + checker): 87% correct (31 questions), with 2 wrong
