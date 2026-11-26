@@ -53,13 +53,18 @@ def format_context(hits: list[Hit]) -> str:
     )
 
 
+CITATION = re.compile(r"[\[【]\s*(\d+(?:\s*[,;]\s*\d+)*)\s*(?:†[^\]】]*)?[\]】]")
+
+
 def cited_numbers(answer: str, n_hits: int) -> list[int]:
-    """Passage numbers the model actually cited, in order, ignoring out-of-range numbers."""
+    """Passage numbers the model actually cited, in order, ignoring out-of-range numbers.
+    Accepts [1], [1, 3] and the full-width 【1】 / 【1†L3】 brackets that gpt-oss models use."""
     seen = []
-    for m in re.findall(r"\[(\d+)\]", answer):
-        i = int(m)
-        if 1 <= i <= n_hits and i not in seen:
-            seen.append(i)
+    for group in CITATION.findall(answer):
+        for m in re.findall(r"\d+", group):
+            i = int(m)
+            if 1 <= i <= n_hits and i not in seen:
+                seen.append(i)
     return seen
 
 
