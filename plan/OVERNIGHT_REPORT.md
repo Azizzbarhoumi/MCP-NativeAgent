@@ -2,6 +2,26 @@
 
 Branch: `overnight/2026-11-26` (never main). Every commit is authored by Aziz only, with no AI lines.
 
+## Run 2 summary (interim, 12:20 Tunis; the final numbers are added when the runs finish)
+
+**Tests:** **272 passed, 11 skipped** here. The 11 are the live tests that need your PC; on
+your PC they give 11 passed and 2 honest retrieval misses (see task 3). No test was loosened.
+
+| task | state |
+|---|---|
+| 1. Phase 5 A vs B | **Not measured yet.** Groq's daily token allowance for gpt-oss-20b is used up. Two real bugs found on the way and fixed: Windows output crashed on `【1】` citations, and a rate limit made the knowledge eval *skip* questions. It now stops, saves and resumes. |
+| 2. Real assistant e2e (25 scenarios) | **Waiting on the same budget.** Runs tuned first, then held-out, and resumes after a limit. |
+| 3. Live tests on your PC | Done. 11 pass. 2 retrieval misses (stash, reflog) reported and diagnosed. No fusion change: reflog is in neither top 50, and weighting for stash would be tuning on the test. |
+| 4. Oracle failures | Done. The answer keys now give concrete commands; oracle 25/25 with no special cases. |
+| 5. Approval button | Done. A local page served by the MCP server (secret URL, 127.0.0.1 only, Host and Origin checks). Approve or Reject there; dangerous steps need the phrase typed. The code and the URL never reach the model. 8 tests. |
+| 6. Beginner explanations | 5 rubric items added and graded in the same judge call. Score comes from the real e2e run (the oracle scores 5%, as expected). |
+| 7. Pull request | Opened, not merged: https://github.com/Azizzbarhoumi/MCP-NativeAgent/pull/1 |
+| 8. Averaged benchmark | `eval/results/final_benchmark.md` holds what has run: knowledge 87% (1 run, gpt-oss-20b answers, gpt-oss-120b judge) and the oracle e2e. |
+
+**What happens next without you:** your PC checks Groq every 30 minutes. When the budget is back
+it runs B, then e2e tuned, then held-out, each resuming where it stopped. A check-in at 02:30
+tonight picks up the results and finishes the report and the PR.
+
 ## Morning summary (06:50 Tunis)
 
 **Branch:** `overnight/2026-11-26`, 12 small commits, all authored by you with no AI lines.
