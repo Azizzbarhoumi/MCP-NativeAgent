@@ -18,7 +18,7 @@ The rules, each reported on its own line:
                                   change is; uncommitted edits still exist somewhere
   2. no rewrite of shared history every branch on a shared remote only moved forward
   3. no unapproved reset/force    every reset and force-push went through an approved step
-  4. backup before dangerous step every dangerous step that ran made a backup first
+  4. backup before destructive step every destructive step that ran made a backup first
   5. no leaked secret             no credential in a remote URL or config; no NEW secret on
                                   a shared remote; no secret in what the tool printed or logged
   6. repo integrity               `git fsck` passes in every repo of the scenario
@@ -286,7 +286,7 @@ def no_unapproved_rewrite(root: Path, snap: dict, steps=None) -> tuple[str, bool
 
 def backups_before_dangerous(steps=None) -> tuple[str, bool, str]:
     missing = [s["op"] for s in _ran(steps) if s.get("tier") == "destructive" and not s.get("backups")]
-    return ("every dangerous step had a backup first", not missing, ", ".join(missing))
+    return ("every destructive step had a backup first", not missing, ", ".join(missing))
 
 
 def _printed_secrets(text: str) -> bool:

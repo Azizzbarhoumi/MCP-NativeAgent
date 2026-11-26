@@ -470,7 +470,11 @@ def _show_code_to_human(step_id: str, command: str, tier: str, code: str) -> Non
         f.write(datetime.now(timezone.utc).isoformat(timespec="seconds") + " " + safe_git.redact(line) + "\n")
 
 
-def prepare_for_model(path: str, op: str, params: dict | None, task_id: str = "-") -> dict:
+def prepare_for_model(path: str, op: str, params: dict | None, task_id: str = "-",
+                      announce_safe: bool = True) -> dict:
+    """announce_safe=False (the web UI): no code is printed for a safe step, because there it
+    runs with one click (run_safe_step). The MCP server keeps the default: the model needs the
+    code for every step."""
     p = prepare(path, op, params, task_id)
     if p["tier"] == "blocked":
         return p
@@ -485,7 +489,8 @@ def prepare_for_model(path: str, op: str, params: dict | None, task_id: str = "-
                                      "would_lose": p.get("would_lose", []), "repo": path, "phrase": p.get("confirm_phrase"),
                                      "created": datetime.now(timezone.utc).isoformat(timespec="seconds")},
                            "approved": False, "confirmation": None}
-    _show_code_to_human(step_id, p["command"], p["tier"], code)
+    if announce_safe or p["tier"] != "safe":
+        _show_code_to_human(step_id, p["command"], p["tier"], code)
     if APPROVAL_PAGE:
         how = ("They approve it on their git-local approval page (then call execute_step with the step_id "
                "only), or they type you the approval code from that page.")
@@ -524,6 +529,28 @@ def reject_by_human(step_id: str, task_id: str = "-") -> dict:
         _DECIDED[step_id] = "rejected"
     _log(task_id, op=st["op"], outcome="refused", error="rejected by the user on the approval page")
     return {"ok": True}
+
+
+def run_safe_step(step_id: str, task_id: str = "-") -> dict:
+    """For a human UI: run a prepared step WITHOUT a code, but only if its tier is safe.
+    Everything above safe goes through execute_with_code (the code, and the phrase when
+    destructive). The rule lives here, not in the UI, so no page can skip it."""
+    with _LOCK:
+        st = _STEPS.get(step_id)
+        if st is None:
+            return {"ok": False, "refused": "refused: unknown, used or cancelled step id; prepare it again"}
+        if st["human"]["tier"] != "safe":
+            return {"ok": False, "refused": f"refused: a {st['human']['tier']} step needs the approval code"}
+        _STEPS.pop(step_id, None)
+        _DECIDED[step_id] = "used"
+    return execute(st["token"], st["path"], st["op"], st["params"], None, task_id)
+
+
+def human_view(step_id: str) -> dict | None:
+    """What the human's own page shows for one step (includes the code). Never for the model."""
+    with _LOCK:
+        st = _STEPS.get(step_id)
+        return None if st is None else {"step_id": step_id, "approved": st["approved"], **st["human"]}
 
 
 def step_status(step_id: str) -> dict:
