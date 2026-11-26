@@ -149,6 +149,8 @@ It uses your LLM budget (one or two calls).</p></div>""")
         for i, s in enumerate(plan["steps"]):
             if i in case.done:
                 status = '<span class="ok">done</span>'
+            elif i in case.skipped:
+                status = f'<span class="muted">not run by the tool: {e(case.skipped[i])}</span>'
             elif case.current == i:
                 status = '<span class="muted">running: waiting for you below</span>'
             else:
@@ -285,7 +287,8 @@ def create_app(ws: Workspace, secret: str, allowed_hosts: set[str]) -> FastAPI:
         case = case_or_404(name)
         if case is None:
             return HTMLResponse(page("Not found", "<p>No such repo.</p>"), status_code=404)
-        return case_html(ws, case, base)
+        with ws.lock:                       # rendering reads and clears the case's messages
+            return case_html(ws, case, base)
 
     @app.post(base + "repo/{name}/{action}")
     async def act(name: str, action: str, request: Request):

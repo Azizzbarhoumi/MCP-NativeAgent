@@ -155,3 +155,20 @@ def test_states_mid_operation_match_too(root):
     subprocess.run(["git", "merge", "feature"], cwd=repo, capture_output=True, env={**os.environ, **ENV})
     for cmd in ["git checkout --theirs -- a.txt", "git merge --abort", "git switch feature"]:
         assert text_tier(repo, cmd) == tool_tier(repo, cmd), cmd
+
+
+def test_bare_pull_and_rebase_use_the_upstream_even_with_another_name(root):
+    """`git pull --rebase` / `git rebase` with no arguments replay onto the branch's upstream.
+    The translator used origin/<this branch>, which is wrong when the branch tracks another name
+    (here `work` tracks origin/main); the plan's text rating now uses the same default."""
+    repo = make(root, "local")
+    git(repo, "switch", "-q", "-c", "work", "--track", "origin/main")
+    commit(repo, "w.txt", "local only\n")
+    ops = lambda cmd: [(a.op, a.params) for a in to_ops({"command": cmd, "why": ""}, repo) if a.kind == "op"]
+    assert ops("git pull --rebase") == [("fetch", {"remote": "origin"}), ("rebase", {"onto": "origin/main"})]
+    assert ops("git pull") == [("pull", {"remote": "origin", "branch": "main"})]
+    assert ops("git rebase") == [("rebase", {"onto": "origin/main"})]
+    for cmd in ("git pull --rebase", "git rebase", "git pull --rebase origin"):
+        assert text_tier(repo, cmd) == tool_tier(repo, cmd) == "careful", cmd
+    git(repo, "switch", "-q", "-c", "lonely", "--no-track")
+    assert [a.kind for a in to_ops({"command": "git rebase", "why": ""}, repo)] == ["unsupported"]

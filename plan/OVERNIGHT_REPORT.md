@@ -951,3 +951,28 @@ updated with the points above.
 - **The approval button stays off by default** until you've reviewed `docs/approval_page.md`.
 - **Merging `step/web-ui`** is your call, ideally after the benchmark runs finish. It changes the
   tier vocabulary that the e2e metrics use.
+
+### Run 4, part 2: my own review of the branch (23:00 to 23:30 Tunis)
+
+I reviewed the new code before calling it done. I found 5 real problems and fixed them, each
+with a test:
+1. **A step was shown as "done" when nothing ran.**
+   - Affected: a command the tool does not run (`git checkout -- file`, `ssh-keygen`), and a
+     command with nothing to run (`git merge` with no branch).
+   - Now the step shows "not run by the tool: <why>" and a warning, never "done".
+2. **A bare `git pull --rebase` or `git pull` replayed onto the wrong branch.** The translator
+   used `origin/<this branch>` instead of the branch's upstream, which is wrong when they have
+   different names. A bare `git rebase` translated to nothing at all.
+   - Both now use the upstream. With no upstream, a bare rebase is marked unsupported.
+   - The plan's text rating uses the same default, and the risk-table test now covers this case.
+3. **An LLM error cost two calls.** The "retry without docs" path also caught LLM errors.
+   - Now the page checks first, locally and with no LLM call, whether the docs search is
+     reachable, then asks the LLM once. An error is shown as it is.
+4. **"Plan again" left the waiting step's code alive** for up to 10 minutes. It now cancels
+   that step first.
+5. **Rendering the page and the button handlers could interleave.** Rendering now holds the
+   same lock.
+
+**Tests:** **316 passed, 11 skipped.**
+- **Oracle e2e on this branch:** still 25/25, with 100% tier agreement on both sets.
+- All of this is on `step/web-ui` only.

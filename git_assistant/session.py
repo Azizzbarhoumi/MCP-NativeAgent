@@ -47,6 +47,7 @@ class Case:
     plan: dict | None = None
     plan_source: str = ""            # "assistant" or "answer key (no LLM)"
     done: set = field(default_factory=set)          # plan step numbers finished
+    skipped: dict = field(default_factory=dict)     # plan step -> why the tool did not run it
     queue: list = field(default_factory=list)       # actions of the current step still to go
     current: int | None = None                      # plan step being run
     pending: dict | None = None                     # op waiting for the human's approval
@@ -104,16 +105,20 @@ class Workspace:
         """The assistant's plan (one LLM call, two with the safety review), or the scenario's
         answer key when use_llm is False (a demo with no LLM budget; labelled as such)."""
         with self.lock:
+            if case.pending:                                 # a new plan cancels the step left waiting
+                ex.reject_by_human(case.pending["step_id"], case.task_id)
             if use_llm:
-                from git_assistant.diagnose import diagnose
+                from git_assistant import diagnose as dg
                 k = case.key
-                try:
-                    plan = diagnose(str(case.work), k["user_says"], k["command"], k["error_output"], case.task_id)
-                except (llm.ProviderAccessError, llm.ProviderUnavailable):
-                    raise                                    # the LLM itself: say so, don't retry
-                except Exception:                            # no Qdrant / no embedding model: no docs
-                    plan = diagnose(str(case.work), k["user_says"], k["command"], k["error_output"], case.task_id,
-                                    use_docs=False)
+                try:                                         # docs reachable? (local, no LLM call)
+                    dg.gather_docs(k["user_says"], k=1)
+                    docs = True
+                except Exception:                            # no Qdrant / no embedding model
+                    docs = False
+                # one plan request; an LLM failure is shown as it is, never retried here
+                plan = dg.diagnose(str(case.work), k["user_says"], k["command"], k["error_output"], case.task_id,
+                                   use_docs=docs)
+                if not docs:
                     plan["note"] = "the documentation search was not reachable, so the plan uses no excerpts"
                 source = "assistant"
             else:
@@ -124,6 +129,7 @@ class Workspace:
                 source = "answer key (no LLM)"
             case.plan, case.plan_source = plan, source
             case.done, case.queue, case.current, case.pending, case.manual = set(), [], None, None, None
+            case.skipped = {}
             return plan
 
     # ---------------------------------------------------------------- run
@@ -146,6 +152,12 @@ class Workspace:
             except Exception as e:                           # the translator must never crash the UI
                 case.queue = []
                 case.messages.append(("error", f"Could not turn this step into tool operations: {e}"))
+                return
+            if not case.queue:                               # e.g. `git merge` with no branch: not "done"
+                case.skipped[i] = "the tool found nothing it can run in this command"
+                case.messages.append(("warn", f"Step {i + 1}: {case.skipped[i]}."))
+                return
+            case.skipped.pop(i, None)
             case.current = i
             self._advance(case)
 
@@ -182,9 +194,14 @@ class Workspace:
 
     def _step_finished(self, case: Case) -> None:
         if case.current is not None and not case.pending and not case.manual:
-            failed = [e for e in case.ran if e["step"] == case.current + 1 and e.get("result") not in
-                      ("ok", "nothing to run", "skipped", "done by hand")]
-            if not failed:
+            mine = [e for e in case.ran if e["step"] == case.current + 1]
+            failed = [e for e in mine if e.get("result") not in ("ok", "nothing to run", "skipped", "done by hand")]
+            not_run = [e for e in mine if e.get("result") == "skipped"]
+            if not_run:      # outside git, or no tool operation (e.g. discarding edits): not "done"
+                case.skipped[case.current] = "; ".join(e.get("note") or "not run" for e in not_run)
+                case.messages.append(("warn", f"Step {case.current + 1} was not run by the tool: "
+                                              f"{case.skipped[case.current]}. Do it yourself if you agree with it."))
+            elif not failed:
                 case.done.add(case.current)
             case.current = None
         self.recheck(case)

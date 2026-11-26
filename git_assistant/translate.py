@@ -59,6 +59,23 @@ def _upstream_remote(repo) -> str:
     return "origin" if "origin" in remotes or not remotes else remotes[0]
 
 
+def _upstream(repo) -> str:
+    """'origin/develop' when the current branch tracks one, else ''."""
+    up = _git(repo, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+    return up if "/" in up and not up.startswith(("fatal", "error")) else ""
+
+
+def _pull_target(repo, pos: list[str]) -> tuple[str, str]:
+    """(remote, branch) that `git pull [remote [branch]]` uses: what is named, else the branch's
+    upstream (which may have another name than the local branch), else origin/<this branch>."""
+    up = _upstream(repo)
+    up_remote, up_branch = up.split("/", 1) if up else ("", "")
+    remote = pos[0] if pos else (up_remote or _upstream_remote(repo))
+    if len(pos) > 1:
+        return remote, pos[1]
+    return remote, up_branch if up and remote == up_remote else _current_branch(repo)
+
+
 def _in_merge(repo) -> bool:
     return (repo / ".git" / "MERGE_HEAD").exists()
 
@@ -199,7 +216,10 @@ def _one(cmd: str, repo, manual_files, why: str) -> list[Action]:
             return [A("rebase_continue")]
         if "-i" in flags or "--interactive" in flags or "--onto" in flags:
             return [Action("unsupported", text=cmd, note="interactive / --onto rebase is not offered")]
-        return [A("rebase", onto=pos[0])] if pos else []
+        if pos:
+            return [A("rebase", onto=pos[0])]
+        up = _upstream(repo)                    # `git rebase` alone replays onto the upstream
+        return [A("rebase", onto=up)] if up else [Action("unsupported", text=cmd, note="no branch given and no upstream set")]
 
     if sub == "revert":
         if "--abort" in flags or "--continue" in flags:
@@ -226,8 +246,7 @@ def _one(cmd: str, repo, manual_files, why: str) -> list[Action]:
         return [A("fetch", remote=pos[0] if pos else _upstream_remote(repo))]
 
     if sub == "pull":
-        remote = pos[0] if pos else _upstream_remote(repo)
-        branch = pos[1] if len(pos) > 1 else _current_branch(repo)
+        remote, branch = _pull_target(repo, pos)
         if "--rebase" in flags or "-r" in flags:
             return [A("fetch", remote=remote), A("rebase", onto=f"{remote}/{branch}")]
         return [A("pull", remote=remote, branch=branch)]

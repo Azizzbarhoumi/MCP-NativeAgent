@@ -291,3 +291,43 @@ def test_demo_is_one_command(tmp_path, monkeypatch, capsys):
     assert (tmp_path / "ws" / "merge_conflict-1" / "work" / ".git").exists()
     err = capsys.readouterr().err
     assert "http://127.0.0.1:8799/" in err and seen["opened"] in err and "/repo/merge_conflict-1" in seen["opened"]
+
+
+def test_steps_the_tool_does_not_run_are_never_marked_done(ui, monkeypatch):
+    fake_llm(monkeypatch, {"cause": "x", "explanation": "y", "warnings": [],
+                           "steps": [{"command": "git checkout -- app.py", "why": "discard the edit"},
+                                     {"command": "ssh-keygen -t ed25519", "why": "make a key"},
+                                     {"command": "git merge", "why": "no branch named"},
+                                     {"command": "git status", "why": "look"}]})
+    name = build(ui, "push_rejected")
+    act(ui, name, "diagnose", mode="llm")
+    case = ui.ws.get(name)
+    for i in range(4):
+        html = act(ui, name, "run", step=str(i))
+    assert case.done == {3}                                   # only the read-only look counts as done
+    assert set(case.skipped) == {0, 1, 2}
+    assert "not run by the tool: discarding file changes has no tool operation" in html
+
+
+def test_a_new_plan_cancels_the_step_left_waiting(ui):
+    name = build(ui, "push_rejected")
+    act(ui, name, "diagnose", mode="key")
+    sid = pending_id(act(ui, name, "run", step="0"))
+    code = code_for(sid)
+    html = act(ui, name, "diagnose", mode="key")
+    assert pending_id(html) is None and ex.step_status(sid)["status"] == "rejected"
+    assert not ex.execute_with_code(sid, code)["ok"]          # the old code is dead
+
+
+def test_an_llm_error_costs_one_call_not_two(ui, monkeypatch):
+    calls = []
+    def broken(*a, **k):
+        calls.append(1)
+        raise RuntimeError("400 bad request")
+    monkeypatch.setattr(dg, "chat", broken)
+    def no_docs(*a, **k):
+        raise ConnectionError("qdrant not running")
+    monkeypatch.setattr(dg, "gather_docs", no_docs)
+    name = build(ui, "push_rejected")
+    html = act(ui, name, "diagnose", mode="llm")
+    assert "400 bad request" in html and len(calls) == 1

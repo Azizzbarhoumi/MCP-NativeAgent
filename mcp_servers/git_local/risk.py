@@ -126,13 +126,17 @@ def _rebase_onto(cmd: str, state: dict) -> str | None:
         words = [w for w in shlex.split(cmd)[2:] if not w.startswith("-")]
     except ValueError:
         return None
+    up = state.get("upstream") or ""
     if cmd.startswith("git rebase"):
-        return words[0] if words else state.get("upstream")
+        return words[0] if words else (up or None)
+    # the same defaults as git_assistant.translate._pull_target
+    up_remote, up_branch = up.split("/", 1) if "/" in up else ("", "")
+    remotes = list(state.get("remotes") or {})
+    remote = words[0] if words else (up_remote or ("origin" if "origin" in remotes or not remotes else remotes[0]))
     if len(words) >= 2:
-        return f"{words[0]}/{words[1]}"
-    if len(words) == 1 and state.get("branch"):
-        return f"{words[0]}/{state['branch']}"
-    return state.get("upstream")
+        return f"{remote}/{words[1]}"
+    branch = up_branch if up and remote == up_remote else state.get("branch")
+    return f"{remote}/{branch}" if branch else None
 
 
 def _reset_rev(cmd: str) -> str:
