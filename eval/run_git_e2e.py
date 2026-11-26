@@ -17,6 +17,8 @@ For every scenario (fresh repo each run):
   python -m eval.run_git_e2e --runs 3 --only merge_conflict,push_rejected
   python -m eval.run_git_e2e --oracle --no-judge   no LLM: plan = the answer key's first fix
                                                    (tests the harness, gives the ceiling)
+  python -m eval.run_git_e2e --replay <results.json>   no LLM: run the recorded plans again on
+                                                   today's harness, say which verdicts change
 Writes eval/results/git_e2e_<tag>_<timestamp>.json and .md (tuned and held-out tables apart).
 """
 
@@ -213,7 +215,17 @@ def failure_reason(row: dict) -> tuple[str, str] | None:
     return "assistant", "advice missed rubric items: " + ", ".join(failed_items)
 
 
-def run_one(build, run: int, a, task_prefix: str) -> dict:
+def recorded_verdicts(rec: dict) -> dict:
+    """The judge's item verdicts from a recorded row, keyed by item id (llm items only)."""
+    return {r["id"]: {"ok": r["ok"], "why": r.get("why", "")}
+            for r in rec.get("rubric", []) + rec.get("beginner", []) if r.get("type") == "llm"}
+
+
+def run_one(build, run: int, a, task_prefix: str, recorded: dict | None = None) -> dict:
+    """One scenario run. With `recorded` (a row from an earlier results file) nothing asks an
+    LLM: the recorded plan is executed again in a fresh repo and the judge's recorded verdicts
+    are reused, so only the harness (translate, tool, checks, deterministic rubric items) is
+    measured again."""
     from git_assistant.diagnose import diagnose
     from mcp_servers.git_local import execute as ex
     root = BUILD / f"run{run}" / build.__name__
@@ -226,10 +238,19 @@ def run_one(build, run: int, a, task_prefix: str) -> dict:
     task_id = f"{task_prefix}-{new_id()[:8]}"
     t0 = time.monotonic()
     row = {"id": key["id"], "run": run, "held_out": key["held_out"], "category": key["category"],
-           "grading": key["grading"], "task_id": task_id, "oracle": a.oracle}
+           "grading": key["grading"], "task_id": task_id, "oracle": recorded.get("oracle", False) if recorded else a.oracle}
+    judged_before = recorded is not None and recorded.get("diagnosis") != "n/a"
     try:
-        ans = oracle_plan(key) if a.oracle else diagnose(
-            str(work), key["user_says"], key["command"], key["error_output"], task_id)
+        if recorded is not None:
+            # The tiers shown with each step come from code (risk.py), not from the model, so
+            # they are rated again with today's code, in this fresh repo.
+            from git_assistant.diagnose import gather_state, rate
+            ans = rate(json.loads(json.dumps(recorded["answer"])), gather_state(str(work))[0])
+            if recorded.get("error"):
+                row["error"] = recorded["error"]
+        else:
+            ans = oracle_plan(key) if a.oracle else diagnose(
+                str(work), key["user_says"], key["command"], key["error_output"], task_id)
     except (llm.ProviderAccessError, llm.ProviderUnavailable):
         raise
     except Exception as e:
@@ -242,7 +263,11 @@ def run_one(build, run: int, a, task_prefix: str) -> dict:
                 if l.strip() and json.loads(l).get("task_id") == task_id] if ex.LOG.exists() else []
     inv = invariants(root, snap, key, steps, log_rows)
     rub = rubric_mod.load(key["id"])
-    if a.no_judge or a.oracle:
+    if judged_before:
+        verdict = {"diagnosis": recorded["diagnosis"], "reason": recorded.get("judge_reason", "")}
+        items = recorded_verdicts(recorded)
+        graded, beginner = rubric_mod.grade(ans, rub, None, verdicts=items), rubric_mod.grade(ans, BEGINNER, None, verdicts=items)
+    elif recorded is not None or a.no_judge or a.oracle:
         verdict = {"diagnosis": "n/a", "reason": "not judged"}
         graded = rubric_mod.grade(ans, {"items": [i for i in rub["items"] if i["type"] != "llm"]}, None)
         beginner = rubric_mod.grade(ans, {"items": [i for i in BEGINNER["items"] if i["type"] != "llm"]}, None)
@@ -275,10 +300,77 @@ def run_one(build, run: int, a, task_prefix: str) -> dict:
         row["passed"] = bool(state["passed"]) and inv["passed"]
     else:   # nothing to fix locally: the advice is graded, plus the invariants
         llm_graded = [r for r in graded if r["type"] == "llm"]
-        row["passed"] = inv["passed"] and all(r["ok"] for r in graded) and (bool(llm_graded) or a.oracle or a.no_judge)
+        row["passed"] = inv["passed"] and all(r["ok"] for r in graded) and (
+            bool(llm_graded) or row["oracle"] or a.no_judge or (recorded is not None and not judged_before))
+    if recorded is not None:   # the plan's cost was paid by the recorded run, not by this replay
+        row.update({k: recorded.get(k, 0) for k in ("assistant_tokens", "judge_tokens", "usd_estimate")})
     reason = failure_reason(row)
     row["failure"] = {"who": reason[0], "why": reason[1]} if reason else None
     return row
+
+
+def load_rows(path: Path) -> tuple[list[dict], dict]:
+    """Rows and summary of a results file (.json) or of a run still in progress (.partial.jsonl)."""
+    if path.suffix == ".jsonl":
+        return [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l.strip()], {}
+    d = json.loads(path.read_text(encoding="utf-8"))
+    return d["rows"], d.get("summary", {})
+
+
+def replay_change(before: dict, after: dict) -> str:
+    """What replaying with today's harness says about a recorded result."""
+    if before["passed"] == after["passed"]:
+        return "same"
+    if after["passed"]:
+        return "harness: passes when the same plan runs on today's harness (the recorded run hit a harness bug since fixed)"
+    return "regression: passed when recorded, fails now (a harness or grader change broke it; investigate)"
+
+
+def replay(a, only: set | None) -> None:
+    """Run the plans of a recorded results file again, with no LLM call, and say which verdicts
+    the harness changes. Use it after a harness or grader fix, to relabel failures without
+    spending answer or judge tokens."""
+    src = Path(a.replay)
+    recorded, rec_summary = load_rows(src)
+    by_name = {b.__name__: b for b in SCENARIOS}
+    recorded = [r for r in recorded if r["id"] in by_name and (not only or r["id"] in only)
+                and (a.set == "all" or (a.set == "held_out") == r["held_out"])]
+    print(f"replaying {len(recorded)} recorded scenario run(s) from {src.name} (no LLM calls)\n")
+    rows, changes = [], []
+    for rec in recorded:
+        r = run_one(by_name[rec["id"]], rec["run"], a, f"replay-r{rec['run']}", recorded=rec)
+        r["replayed_from"] = src.name
+        rows.append(r)
+        change = replay_change(rec, r)
+        changes.append((rec, r, change))
+        print(f"r{r['run']} {r['id']:32} recorded {'PASS' if rec['passed'] else 'FAIL'} -> replay "
+              f"{'PASS' if r['passed'] else 'FAIL'}" + ("" if change == "same" else f"  <- {change.split(':')[0]}"))
+    tag = "replay_" + (rec_summary.get("tag") or src.stem.removeprefix("git_e2e_").removesuffix(".partial"))
+    tuned, held = [r for r in rows if not r["held_out"]], [r for r in rows if r["held_out"]]
+    summary = {"tag": tag, "replayed_from": src.name, "answer_model": rec_summary.get("answer_model", "unknown"),
+               "judge": rec_summary.get("judge", "recorded verdicts"), "runs": rec_summary.get("runs", 1),
+               "dangerous_policy": a.dangerous, "tuned": summarize(tuned), "held_out": summarize(held)}
+    out = EVAL / "results" / f"git_e2e_{tag}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    out.with_suffix(".json").write_text(json.dumps({"summary": summary, "rows": rows}, indent=2, default=str),
+                                        encoding="utf-8")
+    passed = lambda rs: f"{sum(r['passed'] for r in rs)}/{len(rs)}"
+    lines = [f"# Replay of `{src.name}` on today's harness", "",
+             "The recorded plans ran again in fresh scenario repos. No LLM was called: the plans and the judge's "
+             "verdicts are the recorded ones, so any change below comes from the harness (translator, tool, checks, "
+             "deterministic rubric items).", "",
+             "| set | recorded passed | replay passed |", "|---|---|---|",
+             f"| tuned | {passed([c[0] for c in changes if not c[0]['held_out']])} | {passed(tuned)} |",
+             f"| held-out | {passed([c[0] for c in changes if c[0]['held_out']])} | {passed(held)} |", "",
+             "## Verdicts that changed", ""]
+    changed = [c for c in changes if c[2] != "same"]
+    lines += [f"- **{rec['id']}** (run {rec['run']}{', held-out' if rec['held_out'] else ''}): {change}. "
+              f"Recorded failure: {(rec.get('failure') or {}).get('who', '-')}: {(rec.get('failure') or {}).get('why', '-')}. "
+              f"Plan: `{' ; '.join(c for c in rec.get('plan', []) if c)[:160]}`" for rec, r, change in changed] or ["None."]
+    lines += ["", "## Failures that remain, as labelled now", ""]
+    lines += [f"- **{r['id']}** (run {r['run']}{', held-out' if r['held_out'] else ''}) [{r['failure']['who']}] "
+              f"{r['failure']['why']}" for r in rows if r["failure"]] or ["None."]
+    out.with_suffix(".md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"\n{len(changed)} verdict(s) changed. wrote {out}.json / .md")
 
 
 def pct(n, d):
@@ -343,6 +435,8 @@ def main() -> None:
     ap.add_argument("--oracle", action="store_true", help="no LLM: run the answer key's first fix")
     ap.add_argument("--no-judge", action="store_true")
     ap.add_argument("--resume", help="a .partial.jsonl from a run that stopped: keep its rows, run the rest")
+    ap.add_argument("--replay", help="a results .json or .partial.jsonl: run its recorded plans again on today's "
+                                     "harness, with no LLM call, and report which verdicts change")
     ap.add_argument("--dangerous", choices=["approve", "refuse"], default="approve",
                     help="approval policy for dangerous steps (approve = the user types the confirmation phrase)")
     a = ap.parse_args()
@@ -353,6 +447,8 @@ def main() -> None:
         shutil.rmtree(BUILD, onerror=lambda f, p, _e: (os.chmod(p, stat.S_IWRITE), f(p)))
     BUILD.mkdir(parents=True)
     (BUILD.parent / ".git-scenarios").write_text("built by the scenario tools\n", encoding="utf-8")
+    if a.replay:
+        return replay(a, only)
 
     builds = [b for b in SCENARIOS if (not only or b.__name__ in only)
               and (a.set == "all" or (a.set == "held_out") == b.__name__.startswith("ho_"))]
