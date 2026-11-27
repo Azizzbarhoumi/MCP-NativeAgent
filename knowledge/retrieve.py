@@ -3,6 +3,8 @@
 Modes:
   baseline  dense only: finds chunks with similar MEANING.
   hybrid    dense + BM25 keywords, merged with Reciprocal Rank Fusion (RRF).
+  graph     dense + BM25 + graph votes (entities of the question -> chunks that mention them,
+            one hop along typed relations), merged with RRF. graph_dense: dense + graph votes.
             Keywords catch exact tokens that meaning-search blurs: flag names like
             --maxfail, rule codes like F841, exit code numbers, setting names.
 """
@@ -99,6 +101,15 @@ def search(question: str, k: int | None = None, collection: str | None = None,
     elif mode == "hybrid":
         hits = rrf_merge([dense_search(question, CANDIDATES, collection),
                           sparse_search(question, CANDIDATES, collection)], n)
+    elif mode in ("graph", "graph_dense"):
+        # Graph votes (knowledge/graph/retrieval.py) as one more ranked list in the RRF:
+        # graph = dense + BM25 + graph, graph_dense = dense + graph.
+        from knowledge.graph.retrieval import graph_search
+        lists = [dense_search(question, CANDIDATES, collection)]
+        if mode == "graph":
+            lists.append(sparse_search(question, CANDIDATES, collection))
+        lists.append(graph_search(question, CANDIDATES, collection))
+        hits = rrf_merge(lists, n)
     else:
         raise ValueError(f"unknown retrieval mode {mode!r}")
     return cap_per_doc(hits, per_doc, k) if per_doc else hits

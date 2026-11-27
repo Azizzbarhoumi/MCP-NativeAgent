@@ -1,0 +1,8 @@
+# Held-out split of the knowledge question set, frozen on 2026-11-27 (Fri, 09:12 Tunis) BEFORE any
+# graph-retrieval work, drawn with random.Random(20261127) within each type (4 lookup, 3 exact_match,
+# 3 multi_hop of the 31 reviewed questions). Rule: these 10 are never looked at while tuning; graph
+# retrieval is designed and tuned on the other 21 only, and results are reported for both halves.
+held_out:
+  exact_match: [ex01, ex05, ex10]
+  lookup: [lo03, lo05, lo09, lo10]
+  multi_hop: [mu02, mu04, mu05]
