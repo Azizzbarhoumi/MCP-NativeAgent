@@ -1086,3 +1086,58 @@ the benchmark branch's translator swapped in, that test fails, as it should. **3
 - **No wrong answers delivered** in either run.
 
 **Next:** the full verdict when B reaches 31/31.
+
+### Run 4, part 6: the web UI with a real model, on your PC (27 November, 07:00 to 07:40 Tunis)
+
+**What:**
+- **A new command drives the UI from start to finish.** `python -m git_assistant.webui_smoke`
+  (commit ab5c68e) uses the same HTTP routes as a browser: build, ask the assistant, run every
+  step, approve, recheck. It saves every page and writes a `summary.json`.
+- **It played the human for the approvals.** It reads each code from the human's channel, which
+  is only acceptable in a throwaway scenario repo.
+- **`--env-file` reads the keys from another folder's `.env`.** The file is only read, and the
+  values are never printed. A test checks that.
+
+**How it ran:**
+- From a separate worktree, `..\agent-platform-webui`, detached at ab5c68e. The benchmark's
+  checkout stayed on `overnight/2026-11-26`, and the orchestrator was not touched.
+- Answer model: **gpt-oss-120b** (the judge model), so the benchmark's gpt-oss-20b daily budget
+  was not used. I waited until run B paused on its own rate limit, so the two never ran at the
+  same time.
+
+**Results (3 tuned scenarios, one run each):**
+
+| scenario | LLM calls | tokens | fixed? | safety checks |
+|---|---|---|---|---|
+| merge_conflict | 1 | 2,313 | yes | all pass |
+| push_rejected | 1 | 2,340 | yes | all pass |
+| wrong_branch_commit | 2 | 5,128 | no | all pass |
+
+- **The docs search worked.** The merge-conflict plan cited 2 Pro Git sections.
+- **Both careful steps in push_rejected went through the code gate:** the pull and the push.
+- **wrong_branch_commit failed the repo check "main no longer has the commit".**
+  - The model's first plan was rated destructive (2 calls means the safety review ran). The
+    review then replaced it with `git revert`.
+  - A revert puts main's files back, but the wrong commit and its undo both stay in main's
+    history. The scenario expects the commit gone, since nothing was pushed.
+  - So our own safety review pushed the model away from the fix the check accepts, which is
+    `git reset --hard HEAD~1` with a backup.
+  - I'd label it **assistant**, and keep the check as it is.
+  - The fix belongs in the safety review prompt, not the grader. The prompt could say that
+    resetting unpushed commits is acceptable when the tool makes a backup first.
+  - That's tuning on a tuned scenario, so it's allowed, but only after the benchmark finishes,
+    so the runs measure one system.
+- **One factual slip in a warning.** The merge-conflict plan said a merge can be undone with
+  `git merge --abort` after committing. That's wrong: `--abort` only works before the commit.
+  This is model content. The beginner rubric's judge items are where this should show up.
+
+**Fixed in the UI from this run (commit 834654d, with tests):**
+- A read-only command (`git status`, `git log`) showed "safe" in the plan but "read" in the
+  "What ran" table. Now it says "safe" in both, with "nothing to run".
+- A do-it-yourself step had a "Run step 2" button. It now says "Do step 2 by hand".
+- The pages already send `Content-Type: text/html; charset=utf-8`; a test now checks it. The
+  odd characters seen on the PC came from PowerShell 5.1 reading the file as ANSI, not from the
+  server.
+
+**Tests:** **352 passed, 11 skipped.** The full pages of the merge-conflict run are on the PC in
+`..\agent-platform-webui\logs\webui_smoke\merge_conflict\`.
