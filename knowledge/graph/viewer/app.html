@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Knowledge graph</title>
+<!-- Served by knowledge/graph/api.py. force-graph (MIT) is inlined below; nothing loads from the network. -->
+<style>
+:root, [data-theme="dark"] {
+  --bg:#0b1220; --canvas:#0f172a; --panel:#111a2e; --panel2:#16213a; --line:#24324f; --text:#e5ecf6;
+  --muted:#8ea0bd; --accent:#2dd4bf; --accent2:#c084fc; --warn:#fbbf24; --bad:#fb7185; --mark:#fde68a33;
+}
+[data-theme="light"] {
+  --bg:#eef2f7; --canvas:#f8fafc; --panel:#ffffff; --panel2:#f1f5f9; --line:#d5dde8; --text:#0f172a;
+  --muted:#52607a; --accent:#0d9488; --accent2:#7c3aed; --warn:#b45309; --bad:#be123c; --mark:#fde68a;
+}
+* { box-sizing:border-box; }
+html, body { margin:0; height:100%; background:var(--bg); color:var(--text);
+  font:13px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; overflow:hidden; }
+button, input, select { font:inherit; color:inherit; }
+:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+#top { position:absolute; left:0; right:0; top:0; height:46px; display:flex; align-items:center; gap:10px;
+  padding:0 12px; background:var(--panel); border-bottom:1px solid var(--line); z-index:5; }
+#top h1 { font-size:14px; margin:0 6px 0 0; white-space:nowrap; font-weight:650; }
+.seg { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+.seg button { background:transparent; border:0; padding:5px 10px; cursor:pointer; color:var(--muted); }
+.seg button[aria-pressed="true"] { background:var(--panel2); color:var(--text); box-shadow:inset 0 -2px 0 var(--accent); }
+.spacer { flex:1; }
+.btn { background:var(--panel2); border:1px solid var(--line); border-radius:7px; padding:5px 10px; cursor:pointer; }
+.btn:hover { border-color:var(--accent); }
+.btn.small { padding:2px 8px; font-size:12px; }
+#searchwrap { position:relative; width:300px; }
+input[type=search], input[type=text], select { width:100%; padding:6px 9px; background:var(--canvas);
+  border:1px solid var(--line); border-radius:7px; }
+.ac { position:absolute; top:34px; left:0; right:0; background:var(--panel); border:1px solid var(--line);
+  border-radius:8px; max-height:340px; overflow:auto; display:none; z-index:20; box-shadow:0 8px 24px #0006; }
+.ac div { padding:5px 9px; cursor:pointer; display:flex; gap:8px; align-items:center; }
+.ac div[aria-selected="true"], .ac div:hover { background:var(--panel2); }
+.ac .t { margin-left:auto; color:var(--muted); font-size:11px; }
+#left { position:absolute; top:46px; left:0; bottom:0; width:268px; background:var(--panel);
+  border-right:1px solid var(--line); overflow:auto; padding:10px 12px 40px; z-index:4; }
+#right { position:absolute; top:46px; right:0; bottom:0; width:400px; background:var(--panel);
+  border-left:1px solid var(--line); overflow:auto; z-index:4; }
+#graph { position:absolute; top:46px; left:268px; right:400px; bottom:0; background:var(--canvas); }
+h2 { font-size:11px; margin:14px 0 6px; color:var(--muted); text-transform:uppercase; letter-spacing:.07em; font-weight:600; }
+.legend .row { display:flex; align-items:center; gap:8px; padding:2px 4px; border-radius:5px; cursor:pointer; user-select:none; }
+.legend .row:hover { background:var(--panel2); }
+.legend .row.off { opacity:.38; }
+.dot { width:10px; height:10px; border-radius:50%; flex:none; }
+.bar { width:14px; height:3px; border-radius:2px; flex:none; }
+.count { margin-left:auto; color:var(--muted); font-variant-numeric:tabular-nums; font-size:12px; }
+label.chk { display:flex; gap:7px; align-items:center; padding:2px 0; cursor:pointer; }
+#status { position:absolute; left:280px; bottom:10px; color:var(--muted); font-size:12px; background:var(--panel);
+  border:1px solid var(--line); padding:4px 9px; border-radius:7px; z-index:3; }
+#tip { position:absolute; pointer-events:none; background:var(--panel); border:1px solid var(--line);
+  border-radius:7px; padding:5px 8px; font-size:12px; display:none; z-index:30; max-width:320px; }
+.insp { padding:12px 14px; }
+.insp h3 { margin:0 0 4px; font-size:15px; word-break:break-word; }
+.badge { display:inline-block; padding:1px 7px; border-radius:9px; font-size:11px; font-weight:600; color:#0b1220; }
+.muted { color:var(--muted); }
+.kv { display:grid; grid-template-columns:92px 1fr; gap:3px 10px; margin:8px 0; font-size:12px; }
+.kv > div:nth-child(odd) { color:var(--muted); }
+.tabs { display:flex; gap:2px; border-bottom:1px solid var(--line); margin:10px -14px 8px; padding:0 10px; }
+.tabs button { background:none; border:0; padding:6px 9px; cursor:pointer; color:var(--muted); border-bottom:2px solid transparent; }
+.tabs button[aria-selected="true"] { color:var(--text); border-bottom-color:var(--accent); }
+.card { border:1px solid var(--line); background:var(--panel2); border-radius:8px; padding:8px 10px; margin:6px 0; }
+.card .title { font-weight:600; }
+.quote { border-left:3px solid var(--accent); padding:2px 8px; margin:4px 0; font-style:italic; }
+.excerpt { white-space:pre-wrap; font:12px/1.5 ui-monospace,Consolas,monospace; max-height:220px; overflow:auto;
+  background:var(--canvas); border:1px solid var(--line); border-radius:6px; padding:6px 8px; margin-top:4px; }
+mark { background:var(--mark); color:inherit; border-radius:2px; outline:1px solid var(--warn); }
+a { color:var(--accent); }
+.link { color:var(--accent); cursor:pointer; text-decoration:underline; text-decoration-color:transparent; }
+.link:hover { text-decoration-color:var(--accent); }
+.relgroup h4 { margin:10px 0 4px; font-size:12px; color:var(--muted); }
+.relrow { padding:4px 0; border-bottom:1px dashed var(--line); }
+.lic { font-size:11px; color:var(--muted); }
+.empty { color:var(--muted); padding:20px 14px; }
+.keys { font-size:12px; color:var(--muted); }
+kbd { border:1px solid var(--line); border-bottom-width:2px; border-radius:4px; padding:0 4px; font-size:11px; }
+input[type=range] { width:100%; }
+.pathbox { display:grid; gap:6px; }
+@media (max-width: 1000px) { #left { width:220px; } #graph { left:220px; right:340px; } #right { width:340px; } #searchwrap { width:180px; } }
+</style>
+</head>
+<body>
+<header id="top">
+  <h1>Knowledge graph</h1>
+  <div class="seg" role="group" aria-label="View mode" id="modes">
+    <button data-mode="communities" aria-pressed="true">Communities</button>
+    <button data-mode="documents">Documents</button>
+    <button data-mode="entities">Entities</button>
+    <button data-mode="path">Path</button>
+    <button data-mode="trace">Answer trace</button>
+  </div>
+  <div id="searchwrap">
+    <input id="search" type="search" placeholder="Search names and aliases  ( / )" aria-label="Search nodes" autocomplete="off">
+    <div class="ac" id="ac" role="listbox"></div>
+  </div>
+  <div class="spacer"></div>
+  <button class="btn" id="exportPng" title="Save the current view as PNG">PNG</button>
+  <button class="btn" id="exportJson" title="Save the current subgraph as JSON">JSON</button>
+  <button class="btn" id="theme" aria-label="Switch light or dark theme">Theme</button>
+</header>
+
+<aside id="left" aria-label="Filters">
+  <div id="pathPanel" hidden>
+    <h2>Shortest path</h2>
+    <div class="pathbox">
+      <div style="position:relative"><input id="pFrom" type="text" placeholder="From (search)" aria-label="Path start"><div class="ac" id="acFrom"></div></div>
+      <div style="position:relative"><input id="pTo" type="text" placeholder="To (search)" aria-label="Path end"><div class="ac" id="acTo"></div></div>
+      <button class="btn" id="pGo">Find path</button>
+    </div>
+  </div>
+  <div id="tracePanel" hidden>
+    <h2>Answer trace</h2>
+    <select id="tRun" aria-label="Benchmark run"></select>
+    <div style="height:6px"></div>
+    <select id="tQ" aria-label="Question"></select>
+    <p class="muted" style="font-size:12px">Shows the chunks retrieved for this answer, their sections and documents, the entities in them, and the entities the graph finds in the question.</p>
+  </div>
+  <h2>Node types <span class="muted" style="text-transform:none">(click to hide)</span></h2>
+  <div class="legend" id="legendTypes"></div>
+  <div class="muted" style="font-size:12px;margin-top:4px" id="groupLegend">Communities are coloured by their main collection:
+    <span class="dot" style="display:inline-block;background:#e2e8f0"></span> dev_docs
+    <span class="dot" style="display:inline-block;background:#2dd4bf"></span> git_docs
+    <span class="dot" style="display:inline-block;background:#facc15"></span> pdf_docs</div>
+  <h2>Relations</h2>
+  <div class="legend" id="legendRels"></div>
+  <h2>Collections</h2>
+  <div id="colls"></div>
+  <h2>Community</h2>
+  <select id="comm" aria-label="Community filter"><option value="">All communities</option></select>
+  <h2>Minimum confidence <span id="confVal" class="muted">0.00</span></h2>
+  <input type="range" id="conf" min="0" max="1" step="0.05" value="0" aria-label="Minimum edge confidence">
+  <label class="chk"><input type="checkbox" id="hasPdf"> Has a PDF source</label>
+  <h2>Focus depth</h2>
+  <div class="seg" role="group" aria-label="Focus depth" id="depth">
+    <button data-d="1" aria-pressed="true">1</button><button data-d="2" aria-pressed="false">2</button><button data-d="3" aria-pressed="false">3</button>
+  </div>
+  <h2>Nodes shown</h2>
+  <select id="maxNodes" aria-label="Maximum nodes"><option>300</option><option selected>800</option><option>1500</option><option>3000</option><option>5000</option></select>
+  <h2>Keys</h2>
+  <div class="keys"><kbd>/</kbd> search &nbsp; <kbd>f</kbd> focus selection &nbsp; <kbd>Esc</kbd> clear<br>
+    Click a node or edge to inspect it. Double-click a node to focus on it.</div>
+</aside>
+
+<main id="graph" aria-label="Graph canvas"></main>
+<div id="status" role="status" aria-live="polite"></div>
+<div id="tip"></div>
+
+<aside id="right" aria-label="Inspector"><div class="empty" id="insp">
+  <h3 style="color:var(--text)">Inspector</h3>
+  <p>Select a node or an edge. Every node lists the documents, chunks and pages it was found in; every edge lists the quotes that support it, with the source's license.</p>
+</div></aside>
+
+<script>/*__FORCE_GRAPH__*/</script>
+<script>
+"use strict";
+const TYPE_COLORS = {
+  community:"#2dd4bf", document:"#facc15", section:"#fde68a", command:"#2dd4bf", flag:"#5eead4", env:"#99f6e4",
+  error:"#fb7185", cause:"#c084fc", concept:"#a78bfa", manual_step:"#e9d5ff", repo_state:"#f0abfc",
+  code:"#e2e8f0", symbol:"#cbd5e1", risk_tier:"#fb923c"
+};
+// communities take the colour of the collection most of their members come from
+const GROUP_COLORS = { dev_docs:"#e2e8f0", git_docs:"#2dd4bf", pdf_docs:"#facc15", playbook:"#c084fc" };
+const FAMILY_COLORS = { structure:"#64748b", mention:"#2dd4bf", docs:"#facc15", command:"#c084fc",
+  troubleshooting:"#fb7185", community:"#2dd4bf" };
+const REL_FAMILY = { HAS_SECTION:"structure", MENTIONS:"mention", DOCUMENTED_IN:"docs", EXPLAINED_IN:"docs",
+  HAS_OPTION:"command", RISK:"command", REQUIRES:"command", LEADS_TO:"troubleshooting", CAUSED_BY:"troubleshooting",
+  FIXED_BY:"troubleshooting", UNDONE_BY:"troubleshooting", LINKS:"community" };
+const state = { mode:"communities", hiddenTypes:new Set(["section"]), hiddenRels:new Set(), colls:new Set(),
+  comm:"", conf:0, hasPdf:false, depth:1, maxNodes:800, focus:null, selected:null, selectedEdge:null,
+  data:{nodes:[], links:[]}, meta:null, highlight:new Set(), hlLinks:new Set(), pathFrom:null, pathTo:null };
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const enc = encodeURIComponent;
+async function api(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+  return r.json();
+}
+function css(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function setStatus(t) { $("#status").textContent = t; }
+
+// ---------------- graph canvas ----------------
+const G = ForceGraph()($("#graph"))
+  .backgroundColor("rgba(0,0,0,0)")
+  .nodeId("id")
+  .nodeVal(n => 1 + Math.sqrt(n.degree || 1) * (n.type === "community" ? 1.8 : 0.9))
+  .nodeLabel(() => "")
+  .linkSource("source").linkTarget("target")
+  .linkColor(l => linkColor(l))
+  .linkWidth(l => state.hlLinks.has(l.id) ? 2.2 : (l.family === "community" ? Math.min(0.4 + Math.log2(1 + l.weight) * 0.35, 3) : 0.5))
+  .linkDirectionalArrowLength(l => state.hlLinks.has(l.id) ? 4 : 0)
+  .linkDirectionalArrowRelPos(1)
+  .cooldownTicks(160)
+  .d3VelocityDecay(0.35)
+  .onNodeClick(n => selectNode(n.id))
+  .onNodeHover(n => showTip(n))
+  .onLinkClick(l => selectEdge(l))
+  .onLinkHover(l => showTip(l, true))
+  .onBackgroundClick(() => clearSelection())
+  .nodeCanvasObject(drawNode)
+  .nodePointerAreaPaint((n, color, ctx) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(n.x, n.y, radius(n) + 2, 0, 2 * Math.PI); ctx.fill(); })
+  .linkCanvasObjectMode(() => "after")
+  .linkCanvasObject(drawLinkLabel);
+let lastClick = { id:null, t:0 };
+function radius(n) { return Math.sqrt(1 + Math.sqrt(n.degree || 1) * (n.type === "community" ? 1.8 : 0.9)) * 3.2; }
+function linkColor(l) {
+  const c = FAMILY_COLORS[l.family] || "#64748b";
+  if (state.hlLinks.size) return state.hlLinks.has(l.id) ? c : hexA(c, 0.06);
+  return hexA(c, l.family === "mention" || l.family === "structure" ? 0.22 : 0.5);
+}
+function hexA(hex, a) {
+  const h = hex.replace("#", ""); const n = parseInt(h, 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+function drawNode(n, ctx, scale) {
+  const r = radius(n);
+  const color = n.type === "community" ? (GROUP_COLORS[n.group] || TYPE_COLORS.community) : (TYPE_COLORS[n.type] || "#94a3b8");
+  const dim = state.highlight.size && !state.highlight.has(n.id);
+  ctx.globalAlpha = dim ? 0.15 : 1;
+  if (n.id === state.selected) { ctx.shadowColor = color; ctx.shadowBlur = 18; }
+  ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, 2 * Math.PI); ctx.fillStyle = color; ctx.fill();
+  ctx.shadowBlur = 0;
+  if (n.id === state.selected || n.id === state.pathFrom || n.id === state.pathTo) {
+    ctx.lineWidth = 2 / scale; ctx.strokeStyle = css("--text"); ctx.stroke();
+  }
+  // level of detail: labels for big nodes, highlighted nodes, or when zoomed in
+  const big = n.labelled || (n.type !== "community" && (n.degree || 0) > 60);
+  if (!dim && (scale > 2.2 || big && scale > 0.25 || state.highlight.has(n.id) && scale > 0.9 || n.id === state.selected)) {
+    const fs = Math.max(11 / scale, 1.6);
+    ctx.font = `${n.id === state.selected ? "600 " : ""}${fs}px system-ui, sans-serif`;
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    const label = (n.name || "").length > 42 ? n.name.slice(0, 40) + "..." : n.name;
+    ctx.fillStyle = css("--canvas"); ctx.globalAlpha = dim ? 0.15 : 0.75;
+    const w = ctx.measureText(label).width;
+    ctx.fillRect(n.x - w / 2 - 1, n.y + r + 1, w + 2, fs + 2);
+    ctx.globalAlpha = dim ? 0.15 : 1; ctx.fillStyle = css("--text");
+    ctx.fillText(label, n.x, n.y + r + 1.5);
+  }
+  ctx.globalAlpha = 1;
+}
+function drawLinkLabel(l, ctx, scale) {
+  if (!(state.hlLinks.has(l.id) && scale > 1.4) && !(hoverLink === l)) return;
+  const s = l.source, t = l.target; if (typeof s !== "object") return;
+  const fs = Math.max(9.5 / scale, 1.8);
+  ctx.font = `${fs}px system-ui, sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const x = (s.x + t.x) / 2, y = (s.y + t.y) / 2, text = l.relation;
+  const w = ctx.measureText(text).width;
+  ctx.fillStyle = css("--panel"); ctx.fillRect(x - w / 2 - 2, y - fs / 2 - 1, w + 4, fs + 2);
+  ctx.fillStyle = FAMILY_COLORS[l.family] || css("--text"); ctx.fillText(text, x, y);
+}
+let hoverLink = null;
+function showTip(obj, isLink) {
+  const tip = $("#tip");
+  hoverLink = isLink ? obj : null;
+  if (!obj) { tip.style.display = "none"; return; }
+  if (isLink) {
+    const s = nodeById(obj.source.id || obj.source), t = nodeById(obj.target.id || obj.target);
+    tip.innerHTML = `<b>${esc(obj.relation)}</b> <span class="muted">${esc(obj.method)} · ${(+obj.confidence).toFixed(2)} · weight ${obj.weight}</span><br>${esc(s?.name)} &rarr; ${esc(t?.name)}`;
+  } else {
+    tip.innerHTML = `<b>${esc(obj.name)}</b><br><span class="muted">${esc(obj.type)} · degree ${obj.degree ?? "-"}${obj.size ? " · " + obj.size + " members" : ""}${obj.mentions ? " · " + obj.mentions + " mentions" : ""}</span>`;
+  }
+  tip.style.display = "block";
+}
+document.addEventListener("mousemove", e => { const t = $("#tip"); t.style.left = (e.clientX + 14) + "px"; t.style.top = (e.clientY + 12) + "px"; });
+function nodeById(id) { return state.data.nodes.find(n => n.id === id); }
+function resize() { const el = $("#graph"); G.width(el.clientWidth).height(el.clientHeight); }
+window.addEventListener("resize", resize);
+
+// ---------------- loading data ----------------
+function params(extra = {}) {
+  const p = new URLSearchParams();
+  const types = Object.keys(state.meta?.counts?.nodes || {}).filter(t => !state.hiddenTypes.has(t));
+  if (state.mode !== "communities") p.set("types", types.join(","));
+  const rels = Object.keys(state.meta?.counts?.edges || {}).filter(r => !state.hiddenRels.has(r));
+  if (state.hiddenRels.size) p.set("relations", rels.join(","));
+  if (state.colls.size) p.set("collections", [...state.colls].join(","));
+  if (state.comm !== "") p.set("communities", state.comm);
+  if (state.conf > 0) p.set("min_confidence", state.conf);
+  if (state.hasPdf) p.set("has_pdf", "true");
+  p.set("max_nodes", state.maxNodes);
+  for (const [k, v] of Object.entries(extra)) p.set(k, v);
+  return p.toString();
+}
+function show(res, what) {
+  const nodes = res.nodes.map(n => ({ ...n }));
+  const ids = new Set(nodes.map(n => n.id));
+  const links = res.edges.filter(e => ids.has(e.source) && ids.has(e.target)).map(e => ({ ...e }));
+  state.data = { nodes, links };
+  state.highlight = new Set(); state.hlLinks = new Set();
+  // community overview: few big nodes, push them apart; dense views: shorter links
+  const many = nodes.length > 400;
+  G.d3Force("charge").strength(what === "Communities" ? -260 : (many ? -18 : -90));
+  G.d3Force("link").distance(what === "Communities" ? 70 : (many ? 18 : 45));
+  // only the biggest communities get a permanent label; the rest show theirs on hover or zoom
+  const bySize = nodes.filter(n => n.type === "community").sort((a, b) => b.size - a.size);
+  bySize.forEach((n, i) => n.labelled = i < 14);
+  // weak pull to the centre so unlinked nodes (degree 0 in this view) stay near the rest
+  // instead of being pushed to the edge by the charge force; d3 accepts a plain function as a force
+  const linked = new Set(links.flatMap(l => [l.source, l.target]));
+  let simNodes = [];
+  const gravity = alpha => simNodes.forEach(n => {
+    const k = (linked.has(n.id) ? 0.02 : 0.12) * alpha;
+    n.vx -= n.x * k; n.vy -= n.y * k;
+  });
+  gravity.initialize = ns => { simNodes = ns; };
+  G.d3Force("gravity", gravity);
+  G.d3Force("charge").distanceMax(what === "Communities" ? 600 : 260);
+  G.graphData(state.data);
+  const hidden = res.hidden ? ` · ${res.hidden.toLocaleString()} ${res.hidden_what || "more match the filters (raise \"Nodes shown\" or focus)"} hidden` : "";
+  setStatus(`${what}: ${nodes.length.toLocaleString()} nodes, ${links.length.toLocaleString()} edges of ${(res.total_nodes || 0).toLocaleString()} nodes${hidden}`);
+  const fit = () => { G.zoomToFit(500, 50); setTimeout(() => { if (G.zoom() > 3.5) G.zoom(3.5, 300); }, 550); };
+  setTimeout(fit, 900);
+  G.onEngineStop(() => { G.onEngineStop(() => {}); fit(); });   // fit once more when the layout settles
+}
+async function load() {
+  try {
+    if (state.mode === "path" || state.mode === "trace") return;
+    if (state.focus) {
+      const res = await api(`/graph?${params({ focus: state.focus, depth: state.depth, view: "entities" })}`);
+      // focus shows sections too: they carry the evidence of mentions
+      const fn = res.nodes.find(n => n.id === state.focus);
+      show(res, `Focus on ${fn ? fn.name : state.focus} (depth ${state.depth})`);
+      highlightAround(state.focus);
+      return;
+    }
+    const res = await api(`/graph?${params({ view: state.mode })}`);
+    show(res, { communities: "Communities", documents: "Documents and their most connected entities", entities: "Most connected entities" }[state.mode]);
+  } catch (e) { setStatus("Error: " + e.message); }
+}
+
+// ---------------- selection and inspector ----------------
+function highlightAround(id) {
+  state.highlight = new Set([id]); state.hlLinks = new Set();
+  for (const l of state.data.links) {
+    const s = l.source.id || l.source, t = l.target.id || l.target;
+    if (s === id || t === id) { state.highlight.add(s); state.highlight.add(t); state.hlLinks.add(l.id); }
+  }
+  G.nodeColor(G.nodeColor());
+}
+function clearSelection() {
+  state.selected = null; state.selectedEdge = null; state.highlight = new Set(); state.hlLinks = new Set();
+  G.nodeColor(G.nodeColor());
+}
+async function selectNode(id) {
+  const now = Date.now();
+  if (lastClick.id === id && now - lastClick.t < 350) { focusOn(id); return; }
+  lastClick = { id, t: now };
+  if (state.mode === "path") { setPathEnd(id); }
+  state.selected = id; state.selectedEdge = null;
+  highlightAround(id);
+  if (id.startsWith("community:")) return inspectCommunity(+id.split(":")[1]);
+  try { renderNode(await api(`/graph/node/${enc(id)}`)); }
+  catch (e) { $("#right").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+function focusOn(id) {
+  if (id.startsWith("community:")) { state.comm = id.split(":")[1]; $("#comm").value = state.comm; setMode("entities"); return; }
+  state.focus = id; if (state.mode === "communities") setMode("entities", true);
+  state.selected = id; load(); selectNode(id);
+}
+function typeBadge(t) { return `<span class="badge" style="background:${TYPE_COLORS[t] || "#94a3b8"}">${esc(t)}</span>`; }
+function nodeLink(id, name, type) { return `<span class="link" data-node="${esc(id)}">${esc(name)}</span>${type ? " " + `<span class="muted">(${esc(type)})</span>` : ""}`; }
+function docCard(d) {
+  const open = d.can_open ? `<a href="/documents/${enc(d.id)}/file" target="_blank" rel="noopener">open document</a>` : `<span class="muted">no file to open</span>`;
+  const pages = (d.page_links || []).map(p => `<a href="/documents/${enc(d.id)}/file#page=${p}" target="_blank" rel="noopener">p. ${p}</a>`).join(" ");
+  return `<div class="card"><div class="title">${esc(d.title)}</div>
+    <div class="muted" style="font-size:12px">${esc(d.source)} · ${esc(d.path)} · ${esc((d.file_type || "").toUpperCase())}${d.pages ? " · " + d.pages + " pages" : ""}${d.mentions ? " · " + d.mentions + " mention(s)" : ""}</div>
+    <div style="margin-top:4px">${open}${d.url ? ` · <a href="${esc(d.url)}" target="_blank" rel="noopener">source page</a>` : ""}${pages ? " · " + pages : ""}</div>
+    <div class="lic"><b>License:</b> ${esc(d.license)}<br><b>Attribution:</b> ${esc(d.attribution || "none given")}</div></div>`;
+}
+function excerpt(c) {
+  const t = c.excerpt || "";
+  if (!c.highlight) return `<div class="excerpt">${esc(t)}</div>`;
+  const [a, b] = c.highlight;
+  return `<div class="excerpt">${esc(t.slice(0, a))}<mark>${esc(t.slice(a, b))}</mark>${esc(t.slice(b))}</div>`;
+}
+function pageText(c) { return c.page_start ? (c.page_end && c.page_end !== c.page_start ? `p. ${c.page_start}-${c.page_end}` : `p. ${c.page_start}`) : ""; }
+function renderNode(n) {
+  const tabs = ["Sources", "Chunks", "Relations", "Used in answers"];
+  const relCount = Object.values(n.relations).reduce((a, v) => a + v.length, 0);
+  const counts = [n.sources.length, n.mention_count, relCount, n.used_in_answers.length];
+  $("#right").innerHTML = `<div class="insp">
+    <div>${typeBadge(n.type)} <span class="muted">${esc(n.id)}</span></div>
+    <h3>${esc(n.name)}</h3>
+    ${n.description ? `<div>${esc(n.description)}</div>` : ""}
+    <div class="kv">
+      <div>Aliases</div><div>${n.aliases.length ? n.aliases.map(esc).join(", ") : '<span class="muted">none</span>'}</div>
+      <div>Collections</div><div>${n.collections.map(esc).join(", ")}</div>
+      <div>Sources</div><div>${n.sources.map(s => esc(s.source)).filter((v, i, a) => a.indexOf(v) === i).join(", ")}</div>
+      <div>Degree</div><div>${n.degree}</div>
+      <div>Community</div><div>${n.community != null ? `<span class="link" data-comm="${n.community}">${esc(n.community_label)}</span>` : '<span class="muted">none</span>'}</div>
+      ${n.pages ? `<div>Pages</div><div>${n.pages}</div>` : ""}${n.page_start ? `<div>Pages</div><div>p. ${n.page_start}-${n.page_end}</div>` : ""}
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn small" data-act="focus">Focus (f)</button>
+      <button class="btn small" data-act="from">Path from here</button>
+      <button class="btn small" data-act="to">Path to here</button>
+    </div>
+    <div class="tabs" role="tablist">${tabs.map((t, i) => `<button role="tab" aria-selected="${i === 0}" data-tab="${i}">${t} <span class="muted">${counts[i]}</span></button>`).join("")}</div>
+    <div id="tabBody"></div></div>`;
+  const bodies = [
+    () => n.sources.map(docCard).join("") || '<div class="muted">No source documents.</div>',
+    () => n.chunks.map(c => `<div class="card"><div class="title">${esc(c.document_title)}</div>
+        <div class="muted" style="font-size:12px">${esc(c.section)} ${pageText(c) ? " · " + pageText(c) : ""} · chunk ${c.order} · ${esc(c.method)} ${(+c.confidence).toFixed(2)}</div>
+        ${excerpt(c)}</div>`).join("") + (n.mention_count > n.chunks.length ? `<div class="muted">${n.mention_count - n.chunks.length} more mention(s) not shown.</div>` : ""),
+    () => Object.entries(n.relations).map(([rel, rows]) => `<div class="relgroup"><h4>${esc(rel)} <span class="muted">${rows.length}</span></h4>
+        ${rows.slice(0, 60).map(r => `<div class="relrow">${nodeLink(r.other, r.other_name, r.other_type)}
+          <span class="muted" style="font-size:11px"> · ${esc(r.method)} ${(+r.confidence).toFixed(2)} · <span class="link" data-edge="${esc(r.edge)}">evidence</span></span>
+          ${r.quote ? `<div class="quote">${esc(r.quote)}</div>` : ""}</div>`).join("")}
+        ${rows.length > 60 ? `<div class="muted">${rows.length - 60} more</div>` : ""}</div>`).join("") || '<div class="muted">No relations.</div>',
+    () => n.used_in_answers.length ? n.used_in_answers.map(u => `<div class="card"><span class="link" data-trace="${esc(u.run)}|${esc(u.id)}">${esc(u.id)}</span>
+        <span class="muted">· rank ${u.rank} · ${esc(u.verdict || "")} · ${esc(u.run)}</span><div>${esc(u.question)}</div></div>`).join("")
+        : '<div class="muted">No benchmark answer retrieved a chunk that mentions this node.</div>',
+  ];
+  const tabBtns = $("#right").querySelectorAll("[data-tab]");
+  const showTab = (i) => { tabBtns.forEach(b => b.setAttribute("aria-selected", b.dataset.tab == i)); $("#tabBody").innerHTML = bodies[i](); };
+  tabBtns.forEach(b => b.onclick = () => showTab(+b.dataset.tab));
+  showTab(0);
+  $("#right").querySelector('[data-act="focus"]').onclick = () => focusOn(n.id);
+  $("#right").querySelector('[data-act="from"]').onclick = () => { state.pathFrom = n.id; $("#pFrom").value = n.name; setMode("path"); };
+  $("#right").querySelector('[data-act="to"]').onclick = () => { state.pathTo = n.id; $("#pTo").value = n.name; setMode("path"); };
+}
+async function selectEdge(l) {
+  state.selectedEdge = l.id; state.hlLinks = new Set([l.id]);
+  const s = l.source.id || l.source, t = l.target.id || l.target;
+  state.highlight = new Set([s, t]);
+  if (l.id.startsWith("agg:") || l.id.startsWith("cc:")) {
+    $("#right").innerHTML = `<div class="insp"><div>${typeBadge("aggregate")}</div><h3>${esc(l.relation)}</h3>
+      <p>${nodeLink(s, nodeById(s)?.name)} &rarr; ${nodeLink(t, nodeById(t)?.name)}</p>
+      <p class="muted">A summary edge drawn for this view (weight ${l.weight}). Its evidence sits on the underlying edges: open either end to see them.</p></div>`;
+    return;
+  }
+  try {
+    const e = await api(`/graph/edge/${enc(l.id)}`);
+    $("#right").innerHTML = `<div class="insp"><div><span class="badge" style="background:${FAMILY_COLORS[e.family]}">${esc(e.relation)}</span> <span class="muted">${esc(e.id)}</span></div>
+      <h3>${esc(e.source_node.name)} &rarr; ${esc(e.target_node.name)}</h3>
+      <div class="kv"><div>From</div><div>${nodeLink(e.source, e.source_node.name, e.source_node.type)}</div>
+        <div>To</div><div>${nodeLink(e.target, e.target_node.name, e.target_node.type)}</div>
+        <div>Confidence</div><div>${(+e.confidence).toFixed(2)}</div><div>Method</div><div>${esc(e.method)}</div>
+        <div>Weight</div><div>${e.weight} (${e.evidence_total} evidence item(s), ${e.evidence.length} shown)</div></div>
+      <h2>Evidence</h2>
+      ${e.evidence.map((ev, i) => `<div class="card"><div class="quote">${esc(ev.quote)}</div>
+        ${ev.note ? `<div class="muted" style="font-size:12px">${esc(ev.note)}</div>` : ""}
+        <div style="font-size:12px"><b>${esc(ev.document.title)}</b> · ${esc(ev.section)}${ev.page ? " · p. " + ev.page : ""} · ${esc(ev.method)}</div>
+        <div style="font-size:12px"><span class="link" data-chunk="${i}">open chunk</span>
+          ${ev.document.can_open ? ` · <a href="/documents/${enc(ev.document_id)}/file${ev.page ? "#page=" + ev.page : ""}" target="_blank" rel="noopener">open document${ev.page ? " at p. " + ev.page : ""}</a>` : ""}
+          ${ev.document.url ? ` · <a href="${esc(ev.document.url)}" target="_blank" rel="noopener">source page</a>` : ""}</div>
+        <div class="lic">License: ${esc(ev.document.license)} · ${esc(ev.document.attribution)}</div>
+        <div data-chunkbody="${i}" hidden>${excerpt(ev.chunk)}</div></div>`).join("")}</div>`;
+    $("#right").querySelectorAll("[data-chunk]").forEach(a => a.onclick = () => { const b = $(`[data-chunkbody="${a.dataset.chunk}"]`); b.hidden = !b.hidden; });
+  } catch (err) { $("#right").innerHTML = `<div class="empty">${esc(err.message)}</div>`; }
+}
+async function inspectCommunity(cid) {
+  const c = await api(`/graph/community/${cid}?limit=60`);
+  $("#right").innerHTML = `<div class="insp"><div>${typeBadge("community")} <span class="muted">community ${cid}</span></div>
+    <h3>${esc(c.label)}</h3>
+    <div class="kv"><div>Members</div><div>${c.size}</div>
+      <div>Label</div><div>${c.label === c.rule_label ? "top three names (no LLM label)" : "LLM label; names: " + esc(c.rule_label)}</div>
+      <div>Sources</div><div>${Object.entries(c.sources).map(([k, v]) => `${esc(k)} (${v})`).join(", ")}</div>
+      <div>Types</div><div>${Object.entries(c.types).map(([k, v]) => `${esc(k)} ${v}`).join(", ")}</div></div>
+    <button class="btn small" id="expand">Expand this community</button>
+    <h2>Most connected members</h2>${c.nodes.slice(0, 40).map(n => `<div>${nodeLink(n.id, n.name, n.type)} <span class="muted">${n.degree}</span></div>`).join("")}</div>`;
+  $("#expand").onclick = () => focusOn(`community:${cid}`);
+}
+$("#right").addEventListener("click", e => {
+  const el = e.target.closest("[data-node],[data-edge],[data-comm],[data-trace]");
+  if (!el) return;
+  if (el.dataset.node) { const id = el.dataset.node; if (!nodeById(id)) { state.focus = id; setMode(state.mode === "communities" ? "entities" : state.mode, true); load(); } selectNode(id); }
+  else if (el.dataset.edge) selectEdge({ id: el.dataset.edge, source: state.selected, target: state.selected, relation: "" });
+  else if (el.dataset.comm) { inspectCommunity(+el.dataset.comm); }
+  else if (el.dataset.trace) { const [run, q] = el.dataset.trace.split("|"); setMode("trace"); $("#tRun").value = run; loadQuestions(run, q); }
+});
+
+// ---------------- search / autocomplete ----------------
+function autocomplete(input, box, onPick) {
+  let items = [], idx = -1, timer;
+  const render = () => {
+    box.innerHTML = items.map((n, i) => `<div role="option" aria-selected="${i === idx}" data-i="${i}"><span class="dot" style="background:${TYPE_COLORS[n.type]}"></span>${esc(n.name)}<span class="t">${esc(n.type)} · ${n.degree}</span></div>`).join("");
+    box.style.display = items.length ? "block" : "none";
+  };
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(async () => { const q = input.value.trim(); items = q ? await api(`/graph/search?q=${enc(q)}`) : []; idx = -1; render(); }, 140);
+  });
+  input.addEventListener("keydown", e => {
+    if (e.key === "ArrowDown") { idx = Math.min(idx + 1, items.length - 1); render(); e.preventDefault(); }
+    else if (e.key === "ArrowUp") { idx = Math.max(idx - 1, 0); render(); e.preventDefault(); }
+    else if (e.key === "Enter" && items.length) { pick(items[Math.max(idx, 0)]); }
+    else if (e.key === "Escape") { box.style.display = "none"; input.blur(); }
+  });
+  box.addEventListener("mousedown", e => { const d = e.target.closest("[data-i]"); if (d) pick(items[+d.dataset.i]); });
+  input.addEventListener("blur", () => setTimeout(() => box.style.display = "none", 150));
+  function pick(n) { box.style.display = "none"; input.value = n.name; onPick(n); }
+}
+autocomplete($("#search"), $("#ac"), n => focusOn(n.id));
+autocomplete($("#pFrom"), $("#acFrom"), n => { state.pathFrom = n.id; });
+autocomplete($("#pTo"), $("#acTo"), n => { state.pathTo = n.id; });
+
+// ---------------- path finder ----------------
+function setPathEnd(id) {
+  const n = nodeById(id);
+  if (!state.pathFrom || (state.pathFrom && state.pathTo)) { state.pathFrom = id; state.pathTo = null; $("#pFrom").value = n?.name || id; $("#pTo").value = ""; }
+  else { state.pathTo = id; $("#pTo").value = n?.name || id; }
+}
+async function findPath() {
+  if (!state.pathFrom || !state.pathTo) { setStatus("Pick a start and an end (search, or click two nodes)."); return; }
+  const p = await api(`/graph/path?from=${enc(state.pathFrom)}&to=${enc(state.pathTo)}`);
+  if (!p.found) { setStatus("No path between these two nodes (risk tiers are never used as stepping stones)."); return; }
+  show({ nodes: p.nodes, edges: p.edges, total_nodes: state.meta.nodes }, `Path in ${p.edges.length} step(s)`);
+  state.highlight = new Set(p.nodes.map(n => n.id)); state.hlLinks = new Set(p.edges.map(e => e.id));
+  const names = Object.fromEntries(p.nodes.map(n => [n.id, n]));
+  $("#right").innerHTML = `<div class="insp"><h3>Path: ${p.edges.length} step(s)</h3>
+    <p class="muted">Each step is an edge with the quote that supports it.</p>
+    ${p.edges.map((e, i) => `<div class="card"><div><b>${i + 1}.</b> ${nodeLink(e.source, names[e.source].name, names[e.source].type)}
+      <span class="badge" style="background:${FAMILY_COLORS[e.family]}">${esc(e.relation)}</span> ${nodeLink(e.target, names[e.target].name, names[e.target].type)}</div>
+      ${e.evidence.map(ev => `<div class="quote">${esc(ev.quote)}</div><div class="muted" style="font-size:11px">${esc(ev.document_id)} · ${esc(ev.section)}${ev.page ? " · p. " + ev.page : ""}</div>`).join("")}
+      <span class="link" data-edge="${esc(e.id)}">all evidence</span></div>`).join("")}</div>`;
+}
+$("#pGo").onclick = findPath;
+
+// ---------------- answer trace ----------------
+async function loadRuns() {
+  const runs = await api("/answers");
+  $("#tRun").innerHTML = runs.map(r => `<option value="${esc(r.run)}">${esc(r.run)} (${r.questions})</option>`).join("");
+  if (runs.length) { $("#tRun").value = runs[runs.length - 1].run; await loadQuestions($("#tRun").value); }
+}
+async function loadQuestions(run, pick) {
+  const qs = await api(`/answers/${enc(run)}`);
+  $("#tQ").innerHTML = qs.map(q => `<option value="${esc(q.id)}">${esc(q.id)} ${esc(q.verdict || "")}: ${esc(q.question.slice(0, 70))}</option>`).join("");
+  if (pick) $("#tQ").value = pick;
+  traceAnswer();
+}
+async function traceAnswer() {
+  const run = $("#tRun").value, q = $("#tQ").value; if (!run || !q) return;
+  const t = await api(`/answers/${enc(run)}/${enc(q)}/trace`);
+  show({ nodes: t.nodes, edges: t.edges, total_nodes: state.meta.nodes }, `How ${q} was answered`);
+  const qset = new Set(t.question_entities);
+  $("#right").innerHTML = `<div class="insp"><div>${typeBadge("answer trace")} <span class="muted">${esc(run)}</span></div>
+    <h3>${esc(t.question)}</h3>
+    <div class="kv"><div>Verdict</div><div>${esc(t.verdict)}</div><div>Expected</div><div>${(t.expected_docs || []).map(esc).join("<br>")}</div></div>
+    <h2>1. Entities in the question</h2>
+    <div>${t.question_entities.length ? t.question_entities.map(id => nodeLink(id, (t.nodes.find(n => n.id === id) || {}).name || id)).join(", ") : '<span class="muted">none found by the graph</span>'}</div>
+    <h2>2. Chunks retrieved (dense or hybrid search)</h2>
+    ${t.steps.map(s => `<div class="card"><div><b>#${s.rank}</b> ${s.cited ? '<span class="badge" style="background:var(--accent)">cited</span>' : '<span class="muted">not cited</span>'}
+      ${s.in_graph ? "" : '<span class="muted"> · not in this graph build</span>'}</div>
+      <div style="font-size:12px">${esc(s.doc)} · ${esc(s.section)} · score ${s.score}</div>
+      ${s.section_node ? `<div style="font-size:12px">section ${nodeLink(s.section_node, s.section.split(" > ").pop())} · entities: ${(s.entities || []).map(id => (qset.has(id) ? "<b>" : "") + nodeLink(id, (t.nodes.find(n => n.id === id) || {}).name || id) + (qset.has(id) ? "</b>" : "")).join(", ") || "none"}</div>` : ""}
+      ${s.excerpt ? `<div class="excerpt">${esc(s.excerpt)}</div>` : ""}</div>`).join("")}
+    <h2>3. Answer</h2><div class="excerpt">${esc(t.answer || "")}</div></div>`;
+  state.highlight = new Set([...qset, ...t.steps.filter(s => s.cited).flatMap(s => [s.section_node, s.document_node])]);
+}
+$("#tRun").onchange = () => loadQuestions($("#tRun").value);
+$("#tQ").onchange = traceAnswer;
+
+// ---------------- filters ----------------
+function renderLegends() {
+  const counts = state.meta.counts.nodes;
+  $("#legendTypes").innerHTML = Object.keys(TYPE_COLORS).filter(t => counts[t]).map(t =>
+    `<div class="row ${state.hiddenTypes.has(t) ? "off" : ""}" data-type="${t}" role="checkbox" tabindex="0" aria-checked="${!state.hiddenTypes.has(t)}"><span class="dot" style="background:${TYPE_COLORS[t]}"></span>${t.replace("_", " ")}<span class="count">${counts[t].toLocaleString()}</span></div>`).join("");
+  const ec = state.meta.counts.edges;
+  $("#legendRels").innerHTML = Object.keys(ec).sort((a, b) => ec[b] - ec[a]).map(r =>
+    `<div class="row ${state.hiddenRels.has(r) ? "off" : ""}" data-rel="${r}" role="checkbox" tabindex="0" aria-checked="${!state.hiddenRels.has(r)}"><span class="bar" style="background:${FAMILY_COLORS[REL_FAMILY[r]]}"></span>${r}<span class="count">${ec[r].toLocaleString()}</span></div>`).join("");
+  $("#colls").innerHTML = state.meta.collections.map(c => `<label class="chk"><input type="checkbox" data-coll="${c}" ${state.colls.has(c) ? "checked" : ""}> ${c}</label>`).join("") +
+    '<div class="muted" style="font-size:12px">None ticked = all collections.</div>';
+}
+function toggleFrom(set, key) { set.has(key) ? set.delete(key) : set.add(key); renderLegends(); load(); }
+$("#legendTypes").addEventListener("click", e => { const r = e.target.closest("[data-type]"); if (r) toggleFrom(state.hiddenTypes, r.dataset.type); });
+$("#legendRels").addEventListener("click", e => { const r = e.target.closest("[data-rel]"); if (r) toggleFrom(state.hiddenRels, r.dataset.rel); });
+for (const id of ["#legendTypes", "#legendRels"]) $(id).addEventListener("keydown", e => { if (e.key === " " || e.key === "Enter") { e.target.click(); e.preventDefault(); } });
+$("#colls").addEventListener("change", e => { const c = e.target.dataset.coll; if (c) { e.target.checked ? state.colls.add(c) : state.colls.delete(c); load(); } });
+$("#comm").onchange = () => { state.comm = $("#comm").value; if (state.mode === "communities") setMode("entities"); else load(); };
+$("#conf").oninput = () => { state.conf = +$("#conf").value; $("#confVal").textContent = state.conf.toFixed(2); };
+$("#conf").onchange = load;
+$("#hasPdf").onchange = () => { state.hasPdf = $("#hasPdf").checked; load(); };
+$("#maxNodes").onchange = () => { state.maxNodes = +$("#maxNodes").value; load(); };
+$("#depth").addEventListener("click", e => { const b = e.target.closest("[data-d]"); if (!b) return;
+  state.depth = +b.dataset.d; $("#depth").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); if (state.focus) load(); });
+
+function setMode(mode, keepFocus) {
+  state.mode = mode; if (!keepFocus) state.focus = null;
+  $("#modes").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.mode === mode));
+  $("#pathPanel").hidden = mode !== "path"; $("#tracePanel").hidden = mode !== "trace";
+  if (mode === "trace") { loadRuns(); return; }
+  if (mode === "path") { if (state.pathFrom && state.pathTo) findPath(); else setStatus("Path: pick a start and an end (search, or click two nodes in the graph)."); return; }
+  load();
+}
+$("#modes").addEventListener("click", e => { const b = e.target.closest("[data-mode]"); if (b) setMode(b.dataset.mode); });
+
+// ---------------- export, theme, keys ----------------
+function download(name, blob) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
+$("#exportPng").onclick = () => {
+  const src = $("#graph canvas"); const c = document.createElement("canvas"); c.width = src.width; c.height = src.height;
+  const ctx = c.getContext("2d"); ctx.fillStyle = css("--canvas"); ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(src, 0, 0);
+  c.toBlob(b => download("knowledge-graph.png", b));
+};
+$("#exportJson").onclick = () => {
+  const strip = l => ({ ...l, source: l.source.id || l.source, target: l.target.id || l.target });
+  const out = { exported_from: location.href, mode: state.mode, focus: state.focus,
+    nodes: state.data.nodes.map(({ x, y, vx, vy, index, __indexColor, ...n }) => n),
+    edges: state.data.links.map(({ index, __indexColor, ...l }) => strip(l)) };
+  download("knowledge-subgraph.json", new Blob([JSON.stringify(out, null, 1)], { type: "application/json" }));
+};
+$("#theme").onclick = () => { const r = document.documentElement; r.dataset.theme = r.dataset.theme === "dark" ? "light" : "dark"; G.nodeColor(G.nodeColor()); };
+document.addEventListener("keydown", e => {
+  const typing = ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName);
+  if (e.key === "/" && !typing) { $("#search").focus(); e.preventDefault(); }
+  else if (e.key === "Escape") { clearSelection(); if (!typing) { $("#right").innerHTML = '<div class="empty">Selection cleared.</div>'; } }
+  else if (e.key === "f" && !typing && state.selected) { focusOn(state.selected); }
+});
+
+// ---------------- start ----------------
+(async function start() {
+  resize();
+  state.meta = await api("/graph/meta");
+  renderLegends();
+  $("#comm").innerHTML += state.meta.communities.filter(c => c.size >= 5).slice(0, 200).map(c => `<option value="${c.id}">${esc(c.label)} (${c.size})</option>`).join("");
+  const p = new URLSearchParams(location.search);
+  if (p.get("mode")) setMode(p.get("mode"));
+  else load();
+  if (p.get("focus")) focusOn(p.get("focus"));
+  if (p.get("edge")) setTimeout(() => selectEdge({ id: p.get("edge"), source: "", target: "", relation: "" }), 900);
+})();
+</script>
+</body>
+</html>

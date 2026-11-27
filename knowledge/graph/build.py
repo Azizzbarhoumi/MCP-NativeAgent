@@ -283,7 +283,8 @@ def playbook(g: Graph, pb: dict, error_keys: dict[str, list[str]]) -> list[str]:
             g.mention(cause_id, c, a, b, 1.0, "playbook")
             g.edge(err, "CAUSED_BY", cause_id, c, quote, 1.0, "playbook")
             for order, step in enumerate(cause["commands"], 1):
-                quote, a, b = q(c, step["cmd"])
+                # quote the step's own `cmd:` entry, not an earlier place that names the command
+                quote, a, b = q(c, f'cmd: "{step["cmd"]}"') if f'cmd: "{step["cmd"]}"' in c["text"] else q(c, step["cmd"])
                 if step.get("manual"):
                     kid = g.node("manual_step", step["cmd"].lower(), step["cmd"])
                 else:
