@@ -1,0 +1,7 @@
+# Decisions about entity merges (see knowledge/graph/canon.py).
+# The builder logs every automatic merge in knowledge/graph/data/merge_log.json with a stable id.
+#   undo:  ids of logged merges to take back (the names become separate nodes again)
+#   merge: extra merges a person decided, e.g. {type: code, from: fail_fast, into: fail-fast}
+# Rebuild after editing: python -m knowledge.graph.build
+undo: []
+merge: []

@@ -23,6 +23,14 @@ class Document(BaseModel):
     path: str          # path inside the source, e.g. "doc/en/how-to/fixtures.rst"
     url: str | None    # public URL of the page, if derivable
     collection: str    # target Qdrant collection, e.g. "dev_docs"
+    title: str | None = None       # human title; None = first heading or the file name
+    file_type: str = ""            # md, rst, adoc, asc, pdf, yaml (empty = from the path suffix)
+    # PDFs only: offset in `text` where each page starts (page 1 first). Chunks use it to
+    # remember "p. 112-113" so the viewer can open the file at that page.
+    page_starts: list[int] | None = None
+
+    def kind(self) -> str:
+        return self.file_type or self.path.rsplit(".", 1)[-1].lower()
 
 
 class SourceAdapter(Protocol):

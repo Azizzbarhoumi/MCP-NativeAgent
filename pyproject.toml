@@ -22,7 +22,9 @@ dependencies = [
 
 [project.optional-dependencies]
 # Installed later with: pip install -e ".[knowledge]" etc.
-knowledge = ["qdrant-client>=1.20,<1.21", "fastembed>=0.5"]  # fastembed: ONNX embeddings, no PyTorch
+knowledge = ["qdrant-client>=1.20,<1.21", "fastembed>=0.5",  # fastembed: ONNX embeddings, no PyTorch
+             "pypdf>=5.0",      # PDF source adapter: BSD, pure Python (PyMuPDF is AGPL)
+             "networkx>=3.2"]   # graph communities (Louvain) and shortest paths: BSD, pure Python
 mcp = ["mcp>=1.0", "fastmcp>=2.0"]
 ui = ["streamlit>=1.36"]
 dev = ["pytest>=8.0", "ruff>=0.5"]

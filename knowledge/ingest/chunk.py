@@ -2,6 +2,7 @@
 
 import re
 import uuid
+from bisect import bisect_right
 
 from pydantic import BaseModel
 
@@ -22,6 +23,12 @@ class Chunk(BaseModel):
     path: str
     url: str | None
     collection: str
+    # Where the chunk's body sits in the document text (None when it cannot be located,
+    # e.g. a sentence-tail overlap that was re-joined). PDFs also get 1-based page numbers.
+    char_start: int | None = None
+    char_end: int | None = None
+    page_start: int | None = None
+    page_end: int | None = None
 
 
 def chunk_id(doc_id: str, index: int) -> str:
@@ -113,17 +120,44 @@ def split_body(body: str, max_chars: int, overlap: int) -> list[str]:
     return pieces
 
 
+def locate(text: str, piece: str, cursor: int) -> tuple[int | None, int | None]:
+    """Character span of `piece` in the document text, searching from `cursor`.
+
+    A piece is not always one substring: paragraphs are re-joined with one blank line and an
+    overlap may carry re-joined sentences. Its first and last 60 characters each lie inside
+    one paragraph, so they are found separately. Returns (None, None) when they are not."""
+    head, tail = piece[:60], piece[-60:]
+    start = text.find(head, cursor)
+    if start < 0:
+        start = text.find(head)
+    if start < 0:
+        return None, None
+    end = text.find(tail, start)
+    return (start, end + len(tail)) if end >= 0 else (start, start + len(piece))
+
+
+def page_of(page_starts: list[int], offset: int) -> int:
+    return max(bisect_right(page_starts, offset), 1)
+
+
 def chunk_document(doc: Document, max_chars: int, overlap: int, min_chars: int) -> list[Chunk]:
-    chunks = []
+    chunks, cursor = [], 0
     for section, body in split_sections(doc.text):
         for piece in split_body(body, max_chars, overlap):
+            start, end = locate(doc.text, piece, cursor)
+            if start is not None:
+                cursor = start          # the next piece may overlap this one, never start before it
             if len(piece) < min_chars:
                 continue
             i = len(chunks)
             title = section or doc.path
+            pages = {}
+            if doc.page_starts and start is not None:
+                pages = {"page_start": page_of(doc.page_starts, start),
+                         "page_end": page_of(doc.page_starts, max(end - 1, start))}
             chunks.append(Chunk(
                 id=chunk_id(doc.id, i), doc_id=doc.id, index=i, text=f"{title}\n\n{piece}",
                 section=section, source=doc.source, path=doc.path, url=doc.url,
-                collection=doc.collection,
+                collection=doc.collection, char_start=start, char_end=end, **pages,
             ))
     return chunks

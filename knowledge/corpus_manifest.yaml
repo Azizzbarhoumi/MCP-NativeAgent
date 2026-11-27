@@ -162,3 +162,15 @@ sources:
   candidates_seen: 43
   url_template: https://github.com/progit/progit2/blob/main/{path_no_ext}.asc
   url_strip: ''
+- name: progit_pdf
+  type: pdf
+  collection: pdf_docs
+  url: https://github.com/progit/progit2/releases/download/2.1.449/progit.pdf
+  file: progit.pdf
+  sha256: 763ecf202d5cc71895597012d5f5aa2cdd8c147485c3eed87bd299a8ddb11ceb
+  version: 2.1.449 (2025-12-12)
+  license: 'CC-BY-NC-SA-3.0 (NON-COMMERCIAL: remove before any commercial use)'
+  attribution: Pro Git, 2nd ed., Scott Chacon and Ben Straub, CC BY-NC-SA 3.0, https://git-scm.com/book
+  note: The same book as progit_book, as the published PDF. Its own collection (pdf_docs) so it adds no
+    duplicate chunks to git_docs retrieval; it exists to give the graph page-level provenance.
+  files: 1

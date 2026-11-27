@@ -192,8 +192,14 @@ class LocalDocsAdapter:
             )
 
 
-def all_adapters(collection: str | None = None) -> list[LocalDocsAdapter]:
-    """Adapters for every downloaded source; only those of `collection` when given."""
-    manifest = yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))
-    adapters = [LocalDocsAdapter(s) for s in manifest["sources"] if (CORPUS / s["name"]).exists()]
+def manifest_sources() -> list[dict]:
+    return yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))["sources"]
+
+
+def all_adapters(collection: str | None = None) -> list:
+    """Adapters for every downloaded source; only those of `collection` when given.
+    A manifest entry with `type: pdf` gets the PDF adapter, every other one the folder adapter."""
+    from knowledge.sources.pdf_docs import PdfAdapter
+    adapters = [PdfAdapter(s, CORPUS) if s.get("type") == "pdf" else LocalDocsAdapter(s)
+                for s in manifest_sources() if (CORPUS / s["name"]).exists()]
     return [a for a in adapters if collection is None or a.collection == collection]
