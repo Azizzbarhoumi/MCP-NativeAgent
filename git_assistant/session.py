@@ -188,7 +188,10 @@ class Workspace:
             if a.kind == "manual":
                 case.manual = {"entry": entry, "text": a.text, "can_simulate": not a.note}
                 return
-            entry.update(tier=a.kind, result="nothing to run" if a.kind == "read" else "skipped", note=a.note)
+            if a.kind == "read":   # same label as in the plan: a read-only command is "safe", there is just nothing to run
+                entry.update(tier="safe", result="nothing to run", note="read-only: it only looks, run it yourself to see")
+            else:
+                entry.update(tier=a.kind, result="skipped", note=a.note)
             case.ran.append(entry)
         self._step_finished(case)
 

@@ -331,3 +331,28 @@ def test_an_llm_error_costs_one_call_not_two(ui, monkeypatch):
     name = build(ui, "push_rejected")
     html = act(ui, name, "diagnose", mode="llm")
     assert "400 bad request" in html and len(calls) == 1
+
+
+# ------------------------------------------------------------------ found in the real-model run on the PC
+
+def test_read_only_and_manual_steps_are_labelled_plainly(ui, monkeypatch):
+    """A read-only command keeps the 'safe' label it had in the plan (it was shown as 'read'), and a
+    do-it-yourself step's button says so (it said 'Run step 2')."""
+    fake_llm(monkeypatch, {"cause": "Both branches changed the same line.", "explanation": "Choose, then commit.",
+                           "steps": [{"command": "git status", "why": "Shows which files are still unmerged."},
+                                     {"command": "", "why": "Edit app.py and remove the conflict markers."}],
+                           "warnings": []})
+    name = build(ui, "merge_conflict")
+    html = act(ui, name, "diagnose", mode="llm")
+    assert "Run step 1</button>" in html and "Do step 2 by hand</button>" in html and "Run step 2" not in html
+    html = act(ui, name, "run", step="0")
+    ran = html.split("<h2>What ran</h2>", 1)[1]
+    assert re.search(r"<code>git status</code></td><td><span class=\"tier\"[^>]*>safe</span>", ran)
+    assert ">read<" not in ran and "nothing to run" in ran
+
+
+def test_pages_declare_utf8(ui):
+    r = ui.get(f"/{SECRET}/")
+    assert r.headers["content-type"].lower().replace(" ", "") == "text/html;charset=utf-8"
+    name = build(ui, "merge_conflict")
+    assert "charset=utf-8" in ui.get(f"/{SECRET}/repo/{name}").headers["content-type"].lower()

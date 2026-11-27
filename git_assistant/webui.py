@@ -155,7 +155,8 @@ It uses your LLM budget (one or two calls).</p></div>""")
                 status = '<span class="muted">running: waiting for you below</span>'
             else:
                 status = (f'<form method="post" action="{r}run"><input type="hidden" name="step" value="{i}">'
-                          f'<button{" disabled" if busy else ""}>Run step {i + 1}</button></form>')
+                          f'<button{" disabled" if busy else ""}>'
+                          f'{f"Run step {i + 1}" if s["command"] else f"Do step {i + 1} by hand"}</button></form>')
             cmd = (f"<code>{e(s['command'])}</code> {badge(s.get('tier'))}" if s["command"]
                    else '<span class="muted">do this yourself:</span>')
             reason = f'<div class="meta">{e(s["tier"])}: {e(s.get("tier_reason", ""))}</div>' if s.get("tier") else ""
