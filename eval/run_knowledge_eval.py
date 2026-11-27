@@ -36,7 +36,9 @@ JUDGE_PROMPT = (EVAL / "judge_prompt.md").read_text(encoding="utf-8")
 # The judge should not be the model that wrote the answers (models grade themselves kindly).
 # Model names change as providers retire them, so the Groq one is overridable in .env.
 JUDGES = {"mistral": ("mistral", "mistral-small-latest"),
-          "groq": ("groq", os.environ.get("GROQ_JUDGE_MODEL") or settings.groq_judge_model)}
+          # "groq" names the judge (gpt-oss-120b); JUDGE_PROVIDER says who serves it
+          "groq": (os.environ.get("JUDGE_PROVIDER") or settings.judge_provider,
+                   os.environ.get("GROQ_JUDGE_MODEL") or settings.groq_judge_model)}
 
 
 def judge(question: str, expected: str, answer: str, task_id: str,

@@ -17,6 +17,7 @@ PROVIDERS = {
     # name: (url, settings attribute holding the key, settings attribute: min seconds between calls)
     "mistral": ("https://api.mistral.ai/v1/chat/completions", "mistral_api_key", "llm_min_interval"),
     "groq": ("https://api.groq.com/openai/v1/chat/completions", "groq_api_key", "groq_min_interval"),
+    "openrouter": ("https://openrouter.ai/api/v1/chat/completions", "openrouter_api_key", "openrouter_min_interval"),
     # Local models through Ollama's OpenAI-compatible endpoint: no key, no rate limit.
     "ollama": (None, None, None),
 }
