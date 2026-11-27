@@ -17,10 +17,25 @@ PROVIDERS = {
     # name: (url, settings attribute holding the key, settings attribute: min seconds between calls)
     "mistral": ("https://api.mistral.ai/v1/chat/completions", "mistral_api_key", "llm_min_interval"),
     "groq": ("https://api.groq.com/openai/v1/chat/completions", "groq_api_key", "groq_min_interval"),
+    "openrouter": ("https://openrouter.ai/api/v1/chat/completions", "openrouter_api_key", "openrouter_min_interval"),
+    # Local models through Ollama's OpenAI-compatible endpoint: no key, no rate limit.
+    "ollama": (None, None, None),
 }
 
 # Running token count per task_id (prompt + completion), read by the eval harness.
 TOKENS: dict[str, int] = {}
+# Per task_id: one (agent, provider, model, prompt_tokens, completion_tokens) per call, for cost.
+USAGE: dict[str, list[tuple]] = {}
+
+class ProviderUnavailable(RuntimeError):
+    """Still rate-limited (429) or unreachable after every retry. The run can resume later,
+    so long benchmarks save what they have and stop instead of recording a failure."""
+
+
+class ProviderAccessError(RuntimeError):
+    """401/402/403: bad key, no budget or no access. Retrying or moving on to the next
+    question cannot help, so callers should stop the run."""
+
 
 _last_call: dict[str, float] = {}  # per provider, so the judge never waits on Mistral's spacing
 
@@ -28,9 +43,12 @@ _last_call: dict[str, float] = {}  # per provider, so the judge never waits on M
 def _call_openai_compatible(provider: str, model: str, messages: list[dict],
                             temperature: float, json_mode: bool = False) -> tuple[str, dict]:
     url, key_name, interval_name = PROVIDERS[provider]
-    key, min_interval = getattr(settings, key_name), getattr(settings, interval_name)
-    if key is None:
-        raise RuntimeError(f"{key_name.upper()} is not set in .env")
+    if provider == "ollama":
+        url, key, min_interval = settings.ollama_base_url.rstrip("/") + "/v1/chat/completions", None, 0.0
+    else:
+        key, min_interval = getattr(settings, key_name), getattr(settings, interval_name)
+        if key is None:
+            raise RuntimeError(f"{key_name.upper()} is not set in .env")
     # Retry on 429 (rate limit) and 5xx (server busy) with exponential backoff, capped at 60s.
     for attempt in range(7):
         time.sleep(max(0.0, min_interval - (time.monotonic() - _last_call.get(provider, 0.0))))
@@ -38,16 +56,17 @@ def _call_openai_compatible(provider: str, model: str, messages: list[dict],
         try:
             resp = httpx.post(
                 url,
-                headers={"Authorization": f"Bearer {key.get_secret_value()}"},
+                headers={"Authorization": f"Bearer {key.get_secret_value()}"} if key else {},
                 json={"model": model, "messages": messages, "temperature": temperature,
                       # json_object: the provider guarantees syntactically valid JSON (both support it)
                       **({"response_format": {"type": "json_object"}} if json_mode else {})},
-                timeout=60,
+                timeout=300 if provider == "ollama" else 60,   # a local model can be slow
             )
-        except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError) as e:
-            # Network blip (DNS, Wi-Fi, timeout): same backoff as a 429, then give up.
+        except httpx.TransportError as e:
+            # Any network failure (DNS, Wi-Fi, connect/read/write/pool timeout, dropped connection,
+            # e.g. after the PC slept) is retried with the same backoff as a 429, then given up.
             if attempt == 6:
-                raise RuntimeError(f"{provider}: network error after 7 attempts: {e}") from e
+                raise ProviderUnavailable(f"{provider}: network error after 7 attempts: {e}") from e
             wait = min(5 * 2 ** attempt, 60)
             print(f"[llm] network error from {provider} ({type(e).__name__}), retrying in {wait}s (attempt {attempt + 1}/7)")
             time.sleep(wait)
@@ -57,6 +76,10 @@ def _call_openai_compatible(provider: str, model: str, messages: list[dict],
         wait = float(resp.headers.get("retry-after", min(5 * 2 ** attempt, 60)))
         print(f"[llm] {resp.status_code} from {provider}, retrying in {wait:.0f}s (attempt {attempt + 1}/7)")
         time.sleep(wait)
+    if resp.status_code == 429:
+        raise ProviderUnavailable(f"{provider}: still rate-limited (429) after 7 attempts")
+    if resp.status_code in (401, 402, 403):
+        raise ProviderAccessError(f"{provider} HTTP {resp.status_code}: {resp.text[:300]}")
     if resp.status_code >= 400:
         # Show the provider's reason (bad key, unknown model, region block...). The body never
         # contains our key, so it is safe to print.
@@ -84,6 +107,8 @@ def chat(
     text, usage = _call_openai_compatible(provider, model, messages, temperature, json_mode)
 
     TOKENS[task_id] = TOKENS.get(task_id, 0) + (usage.get("total_tokens") or 0)
+    USAGE.setdefault(task_id, []).append((agent, provider, model, usage.get("prompt_tokens") or 0,
+                                          usage.get("completion_tokens") or 0))
     if gen:
         gen.end(
             output=text,

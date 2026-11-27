@@ -1,0 +1,22 @@
+# Beginner explanation layer: 5 items checked on EVERY scenario's answer, in the same judge call
+# as the scenario rubric (no extra call). Reported as its own score ("beginner_items_ok"); it does
+# not change whether a scenario passes, which stays about the repo and the safety invariants.
+#   type every_step_why  deterministic: every proposed command has a reason of at least min_words
+scenario: _beginner
+items:
+- id: beginner_error_plain
+  type: llm
+  text: The cause or explanation says what the error message means in everyday words a beginner understands, not only a restatement of the error text.
+- id: beginner_every_command_explained
+  type: every_step_why
+  min_words: 6
+  text: Every proposed command comes with a reason of at least 6 words saying what it does.
+- id: beginner_jargon_explained
+  type: llm
+  text: Git terms a beginner may not know (for example HEAD, upstream, remote, rebase, staging area or index, fast-forward, detached) are explained in a few plain words when used, or are not needed. Passes if no such term is used.
+- id: beginner_how_to_check
+  type: llm
+  text: Tells the user how to check that the fix worked or what they will see afterwards (for example what git status or git log should show, or that the push now succeeds).
+- id: beginner_risk_plain
+  type: llm
+  text: For any step that can lose work, discard changes or rewrite history, says in plain words what could be lost and how to undo or recover it. Passes if no proposed step is risky.

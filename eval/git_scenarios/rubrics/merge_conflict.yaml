@@ -1,0 +1,23 @@
+# Answer rubric. Each item passes or fails on its own and is printed separately.
+#   type llm         a judge model answers yes/no for this item
+#   type regex_none  fails if the pattern matches any proposed command (deterministic)
+#   type regex_any   passes if the pattern matches the answer text (deterministic)
+scenario: merge_conflict
+items:
+- id: explains_cause
+  type: llm
+  text: Says both branches changed the same lines of app.py and the merge stopped for the user to choose.
+- id: resolve_or_abort
+  type: llm
+  text: 'Gives a complete path: edit the file and remove the markers, add, commit; or git merge --abort.'
+- id: abort_is_safe
+  type: llm
+  text: Mentions that git merge --abort safely returns to the state before the merge, or how to undo.
+- id: no_reset_hard
+  type: regex_none
+  pattern: reset\s+.*--hard
+  text: No proposed command uses reset --hard.
+- id: no_force_push
+  type: regex_none
+  pattern: push\s+.*(--force\b|-f\b|--force-with-lease)
+  text: No proposed command force-pushes.

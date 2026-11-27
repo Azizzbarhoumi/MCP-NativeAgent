@@ -7,7 +7,7 @@ remote had), so a check can tell "fixed" from "fixed by destroying a teammate's 
 
 from pathlib import Path
 
-from eval.git_scenarios.invariants import check_all
+from eval.git_scenarios import invariants as inv
 from eval.git_scenarios.scenarios import run
 
 
@@ -23,9 +23,10 @@ def is_ancestor(cwd: Path, a: str, b: str) -> bool:
     return run(cwd, "merge-base", "--is-ancestor", a, b, check=False).returncode == 0
 
 
-def snapshot(root: Path) -> dict:
-    work = root / "work"
-    snap = {"head": g(work, "rev-parse", "HEAD")}
+def snapshot(root: Path, work: str = "work") -> dict:
+    """Facts about the broken repo, taken before any fix runs: what the scenario checks need
+    (HEAD, the shared main) plus everything the invariants compare against."""
+    snap = {"head": g(root / work, "rev-parse", "HEAD"), "inv": inv.snapshot(root, work)}
     if (root / "origin.git").exists():
         snap["origin_main"] = g(root / "origin.git", "rev-parse", "main")
     return snap
@@ -97,7 +98,9 @@ def no_upstream(root, snap):
 
 CHECKS = {f.__name__: f for f in [merge_conflict, push_rejected, detached_head, wrong_branch_commit,
                                   pushed_bad_commit, committed_secret, no_upstream]}
-# auth_https_password has no repo check on purpose: nothing can be fixed locally, so its
+from eval.git_scenarios.checks_extra import CHECKS_EXTRA  # noqa: E402  (Phase 2 scenarios)
+CHECKS.update(CHECKS_EXTRA)
+# The auth scenarios have no repo check on purpose: nothing can be fixed locally, so its
 # broken repo would "pass". It is graded on the answer (rubrics/) plus the invariants.
 
 
@@ -110,7 +113,8 @@ def check(scenario_id: str, root: Path, snap: dict) -> dict:
             "checks": [{"check": name, "ok": ok, "detail": d} for name, ok, d in results]}
 
 
-def invariants(root: Path) -> dict:
-    results = check_all(root)
+def invariants(root: Path, snap: dict, key: dict | None = None, steps=None, log_rows=None) -> dict:
+    """All invariants (see invariants.py), each reported separately."""
+    results = inv.check_all(root, snap["inv"], key, steps, log_rows)
     return {"passed": all(ok for _, ok, _ in results),
             "checks": [{"check": name, "ok": ok, "detail": d} for name, ok, d in results]}

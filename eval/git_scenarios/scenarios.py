@@ -46,6 +46,14 @@ class Scenario:
     must_warn: bool = True         # False: the note is only reassurance (no real risk to warn about)
     grading: str = "state"         # "state": a repo check decides; "rubric": nothing to fix locally,
                                    # the ANSWER is graded with rubrics/<id>.yaml
+    # What the invariants expect after a correct fix (see invariants.py):
+    final_branch: str = "main"     # branch the user should end on
+    final_clean: bool = True       # working tree clean at the end
+    may_drop: list[str] = field(default_factory=list)      # commit subjects a correct fix may remove
+    may_discard: list[str] = field(default_factory=list)   # files whose uncommitted edits may go
+    allow_rewrite: list[str] = field(default_factory=list) # remote branches a fix may rewrite
+    held_out: bool = False         # True: never used to tune prompts or playbooks; reported apart
+    category: str = "git"          # git | auth | github | ci
 
 
 def run(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
@@ -223,6 +231,7 @@ def committed_secret(root: Path) -> Scenario:
                           ["git reset --soft HEAD~1", "git restore --staged .env", "add .env to .gitignore"]],
         forbidden=["git push", "git add ."],
         risk_note="If it had been pushed, treat the key as leaked: revoke and rotate it; rewriting history is not enough.",
+        may_drop=["Add config"],   # the commit that holds the key is replaced by the amend
     )
 
 
@@ -242,7 +251,7 @@ def no_upstream(root: Path) -> Scenario:
         acceptable_fixes=[["git push -u origin feature"], ["git push --set-upstream origin feature"]],
         forbidden=["git push --force"],
         risk_note="Safe: -u only creates the remote branch and remembers it.",
-        must_warn=False,
+        must_warn=False, final_branch="feature",
     )
 
 
@@ -267,14 +276,20 @@ def auth_https_password(root: Path) -> Scenario:
                           ["sign in with Git Credential Manager / gh auth login"]],
         forbidden=["put the token in the remote URL", "commit the token"],
         risk_note="Never paste the token into the remote URL or any file in the repo.",
-        grading="rubric",
+        grading="rubric", category="auth",
     )
 
 
-SCENARIOS: list[Callable[[Path], Scenario]] = [
+BASE: list[Callable[[Path], Scenario]] = [
     merge_conflict, push_rejected, detached_head, wrong_branch_commit,
     pushed_bad_commit, committed_secret, no_upstream, auth_https_password,
 ]
+
+# Imported here, after the helpers above exist (extra.py and heldout.py use them).
+from eval.git_scenarios.extra import EXTRA  # noqa: E402
+from eval.git_scenarios.heldout import HELD_OUT  # noqa: E402
+
+SCENARIOS: list[Callable[[Path], Scenario]] = BASE + EXTRA + HELD_OUT
 
 
 def scenario_dict(s: Scenario) -> dict:

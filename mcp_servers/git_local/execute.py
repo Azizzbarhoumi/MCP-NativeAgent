@@ -19,6 +19,7 @@ import json
 import re
 import secrets
 import shutil
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -67,9 +68,11 @@ def _remote(repo: Path, name: str) -> str:
     if name not in remotes:
         raise GitToolError(f"no remote named {name}")
     url = safe_git.run(repo, ["remote", "get-url", "--push", name], read_only=True).stdout.strip()
-    if CREDENTIAL.search(url):
+    # https://TOKEN@host has no ':' but is still a credential; ssh://git@host is a normal user name.
+    if CREDENTIAL.search(url) or re.match(r"(?i)https?://[^/\s]+@", url):
         raise GitToolError("blocked: this remote URL contains a credential. Remove it from the URL "
                            "and use a credential manager or SSH key instead (explained, not fixed).")
+    safe_git.check_local_remote(repo, url)     # a remote on this machine must not run hooks on push
     return name
 
 
@@ -168,6 +171,11 @@ OPS: dict[str, Op] = {
                 undo=lambda r, p, b: f"git merge --abort (if it stopped on conflicts) or git reset --merge {b['head'][:12]}"),
     "merge_abort": Op("recoverable", "Cancel the merge in progress and go back to before it.",
                       lambda r, p: ["merge", "--abort"], undo=lambda r, p, b: "run the merge again"),
+    "rebase_abort": Op("recoverable", "Cancel the rebase in progress and put the branch back as it was.",
+                       lambda r, p: ["rebase", "--abort"], undo=lambda r, p, b: "run the rebase again"),
+    "rebase_continue": Op("recoverable", "Go on with the rebase after the conflicts are resolved and staged.",
+                          lambda r, p: ["rebase", "--continue"],
+                          undo=lambda r, p, b: f"git reset --keep ORIG_HEAD  (the branch before the rebase)"),
     "revert": Op("recoverable", "Add a new commit that undoes an old one. History is kept, safe on shared branches.",
                  lambda r, p: ["revert", "--no-edit", _rev(r, p["rev"])],
                  undo=lambda r, p, b: f"git reset --keep {b['head'][:12]}  (only if not pushed yet)"),
@@ -238,7 +246,7 @@ def _log(task_id: str, **fields) -> None:
     LOG.parent.mkdir(parents=True, exist_ok=True)
     row = {"ts": datetime.now(timezone.utc).isoformat(timespec="seconds"), "task_id": task_id, **fields}
     with LOG.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(row, default=str) + "\n")
+        f.write(safe_git.redact(json.dumps(row, default=str)) + "\n")
 
 
 def _tier(op: Op, repo, params) -> str:
@@ -292,9 +300,14 @@ def prepare(path: str, op: str, params: dict | None, task_id: str = "-") -> dict
             preview = "git " + " ".join(spec.build(repo, params))   # validates every argument
         tier = _tier(spec, repo, params)
         lose = (spec.lose(repo, params) if spec.lose else []) if tier == "dangerous" else []
+    except (KeyError, TypeError, ValueError, AttributeError) as e:
+        # Missing or wrong-type parameter from the model (e.g. side="sideways"): refuse, never crash.
+        err = f"blocked: invalid parameters for '{op}' ({type(e).__name__}: {str(e)[:80]})"
+        _log(task_id, op=op, params=_redacted(params), tier="blocked", outcome="refused", error=safe_git.redact(err))
+        return {"op": op, "tier": "blocked", "explain": safe_git.redact(err)}
     except GitToolError as e:
-        _log(task_id, op=op, params=_redacted(params), tier="blocked", outcome="refused", error=str(e))
-        return {"op": op, "tier": "blocked", "explain": str(e)}
+        _log(task_id, op=op, params=_redacted(params), tier="blocked", outcome="refused", error=safe_git.redact(str(e)))
+        return {"op": op, "tier": "blocked", "explain": safe_git.redact(str(e))}
 
     binding = _binding(repo, op, params)
     nonce = secrets.token_hex(8)
@@ -312,7 +325,7 @@ def prepare(path: str, op: str, params: dict | None, task_id: str = "-") -> dict
 
 
 def _redacted(params: dict) -> dict:
-    return json.loads(CREDENTIAL.sub("***", json.dumps(params)))
+    return json.loads(safe_git.redact(CREDENTIAL.sub("***", json.dumps(params))))
 
 
 def _make_backup(repo: Path, kind: str, op: str, params: dict) -> list[str]:
@@ -323,9 +336,20 @@ def _make_backup(repo: Path, kind: str, op: str, params: dict) -> list[str]:
     if "head" in kind and _head(repo) != "unborn":
         w("update-ref", f"{base}/head", _head(repo)); made.append(f"{base}/head")
     if "worktree" in kind:
-        stash = _git(repo, "stash", "create").strip()
-        if stash:
-            w("update-ref", f"{base}/uncommitted", stash); made.append(f"{base}/uncommitted (git stash apply {base}/uncommitted)")
+        conflicted = _git(repo, "diff", "--name-only", "--diff-filter=U").splitlines()
+        if conflicted:
+            # `git stash create` refuses an index with conflicts: copy the files instead.
+            dest = repo / ".git" / "assistant-backup" / stamp
+            for rel in conflicted + _git(repo, "diff", "--name-only", "HEAD").splitlines():
+                src = repo / rel
+                if src.is_file() and not src.is_symlink():
+                    (dest / rel).parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src, dest / rel)
+            made.append(f"copied the changed and conflicted files to {dest}")
+        else:
+            stash = _git(repo, "stash", "create").strip()
+            if stash:
+                w("update-ref", f"{base}/uncommitted", stash); made.append(f"{base}/uncommitted (git stash apply {base}/uncommitted)")
     if kind == "branch":
         tip = _rev(repo, params["name"])
         w("update-ref", f"{base}/branch", tip); made.append(f"{base}/branch (git branch {params['name']} {tip[:12]})")
@@ -394,15 +418,18 @@ def execute(token: str, path: str, op: str, params: dict | None, confirmation: s
             out_text = ""
         else:
             p = safe_git.run(repo, spec.build(repo, params), read_only=False, ok_codes=(0, 1))
-            out_text = (p.stdout + p.stderr).strip()
+            out_text = safe_git.redact((p.stdout + p.stderr).strip())
             if p.returncode:
                 state = ir.repo_state(str(repo))
                 _log(task_id, op=op, params=_redacted(params), tier=entry["tier"], outcome="git_failed", error=out_text[:300])
                 return {"ok": False, "op": op, "output": out_text[-1500:], "state": _plain_state(state),
                         "undo": spec.undo(repo, params, before) if spec.undo else None, "backups": backups}
+    except (KeyError, TypeError, ValueError, AttributeError) as e:
+        _log(task_id, op=op, params=_redacted(params), outcome="refused", error=f"invalid parameters: {type(e).__name__}")
+        return {"ok": False, "op": op, "refused": f"refused: invalid parameters for '{op}'"}
     except GitToolError as e:
-        _log(task_id, op=op, params=_redacted(params), outcome="refused", error=str(e))
-        return {"ok": False, "op": op, "refused": str(e)}
+        _log(task_id, op=op, params=_redacted(params), outcome="refused", error=safe_git.redact(str(e)))
+        return {"ok": False, "op": op, "refused": safe_git.redact(str(e))}
 
     state = ir.repo_state(str(repo))
     undo = [f"git reset --hard {b}" for b in backups if b.endswith("/head")]
@@ -415,3 +442,124 @@ def execute(token: str, path: str, op: str, params: dict | None, confirmation: s
             "head_before": before["head"][:12], "head_after": _head(repo)[:12],
             "undo": undo, "backups": backups,
             "log": ir.log(str(repo), 5, all_branches=False)}
+
+
+# ------------------------------------------------------------ approval for the MCP server
+#
+# prepare() returns the token to its caller. That is right for agent code running in-process
+# (the benchmark, a UI), and WRONG for the MCP server: there the caller is the model, which could
+# then approve its own step. So the server uses the two functions below instead:
+#   prepare_for_model  keeps the token here and gives the model only a step id. A random
+#                      approval code is shown to the HUMAN outside the model's context (stderr of
+#                      the server process and logs/approvals.log), like a 2FA code.
+#   execute_with_code  runs the step only with that code (and the phrase for dangerous steps).
+#                      Three wrong codes cancel the step.
+
+APPROVALS_LOG = LOG.with_name("approvals.log")
+APPROVAL_PAGE = False      # set by approval_ui.start(); off by default until the page is reviewed
+_STEPS: dict[str, dict] = {}
+_DECIDED: dict[str, str] = {}          # step id -> "rejected" / "cancelled" / "used", for step_status
+MAX_CODE_ATTEMPTS = 3
+_LOCK = threading.Lock()               # the approval page runs in another thread
+
+
+def _show_code_to_human(step_id: str, command: str, tier: str, code: str) -> None:
+    import sys
+    line = f"[git-local] approve step {step_id} ({tier}): {command}  ->  approval code: {code}"
+    print(line, file=sys.stderr, flush=True)
+    APPROVALS_LOG.parent.mkdir(parents=True, exist_ok=True)
+    with APPROVALS_LOG.open("a", encoding="utf-8") as f:
+        f.write(datetime.now(timezone.utc).isoformat(timespec="seconds") + " " + safe_git.redact(line) + "\n")
+
+
+def prepare_for_model(path: str, op: str, params: dict | None, task_id: str = "-") -> dict:
+    p = prepare(path, op, params, task_id)
+    if p["tier"] == "blocked":
+        return p
+    step_id = secrets.token_hex(4)
+    code = "".join(secrets.choice("ABCDEFGHJKLMNPQRSTUVWXYZ23456789") for _ in range(6))
+    with _LOCK:
+        _STEPS[step_id] = {"token": p.pop("approval_token"), "code_hash": hashlib.sha256(code.encode()).hexdigest(),
+                           "path": path, "op": op, "params": dict(params or {}), "attempts": 0,
+                           "phrase": p.get("confirm_phrase"),
+                           # shown on the human's approval page only, never returned to the model
+                           "human": {"code": code, "command": p["command"], "tier": p["tier"], "explain": p["explain"],
+                                     "would_lose": p.get("would_lose", []), "repo": path, "phrase": p.get("confirm_phrase"),
+                                     "created": datetime.now(timezone.utc).isoformat(timespec="seconds")},
+                           "approved": False, "confirmation": None}
+    _show_code_to_human(step_id, p["command"], p["tier"], code)
+    if APPROVAL_PAGE:
+        how = ("They approve it on their git-local approval page (then call execute_step with the step_id "
+               "only), or they type you the approval code from that page.")
+    else:
+        how = ("They type you the approval code that git-local showed them (in its console and "
+               "logs/approvals.log); then call execute_step with the step_id and that code.")
+    p.update(step_id=step_id, approval="Show this step to the user and wait. " + how)
+    return p
+
+
+# ---- used by the human's approval page (approval_ui.py), never exposed as an MCP tool
+
+def pending_for_human() -> list[dict]:
+    with _LOCK:
+        return [{"step_id": sid, "approved": st["approved"], **st["human"]}
+                for sid, st in _STEPS.items()]
+
+
+def approve_by_human(step_id: str, confirmation: str | None = None) -> dict:
+    with _LOCK:
+        st = _STEPS.get(step_id)
+        if st is None:
+            return {"ok": False, "error": "unknown or finished step"}
+        if st["phrase"] and confirmation != st["phrase"]:
+            return {"ok": False, "error": f"dangerous step: type exactly '{st['phrase']}' to approve"}
+        st.update(approved=True, confirmation=confirmation if st["phrase"] else None)
+    return {"ok": True}
+
+
+def reject_by_human(step_id: str, task_id: str = "-") -> dict:
+    with _LOCK:
+        st = _STEPS.pop(step_id, None)
+        if st is None:
+            return {"ok": False, "error": "unknown or finished step"}
+        _PENDING.pop(st["token"], None)
+        _DECIDED[step_id] = "rejected"
+    _log(task_id, op=st["op"], outcome="refused", error="rejected by the user on the approval page")
+    return {"ok": True}
+
+
+def step_status(step_id: str) -> dict:
+    """For the model: pending, approved, rejected, cancelled or used. Never the code."""
+    with _LOCK:
+        st = _STEPS.get(step_id)
+        if st is not None:
+            return {"step_id": step_id, "status": "approved" if st["approved"] else "pending"}
+        return {"step_id": step_id, "status": _DECIDED.get(step_id, "unknown")}
+
+
+def execute_with_code(step_id: str, approval_code: str | None = None, confirmation: str | None = None,
+                      task_id: str = "-") -> dict:
+    with _LOCK:
+        step = _STEPS.get(step_id)
+        if step is None:
+            return {"ok": False, "refused": "refused: unknown, used or cancelled step id; prepare it again"}
+        if step["approved"]:                      # the user clicked Approve on the approval page
+            _STEPS.pop(step_id, None)
+            _DECIDED[step_id] = "used"
+            confirmation = step["confirmation"] if step["phrase"] else confirmation
+        elif not approval_code:
+            return {"ok": False, "refused": "waiting: the user has not approved this step yet"}
+        elif not hmac.compare_digest(hashlib.sha256(str(approval_code).encode()).hexdigest(), step["code_hash"]):
+            step["attempts"] += 1
+            if step["attempts"] >= MAX_CODE_ATTEMPTS:
+                _STEPS.pop(step_id, None)
+                _PENDING.pop(step["token"], None)
+                _DECIDED[step_id] = "cancelled"
+                _log(task_id, op=step["op"], outcome="refused", error="approval code wrong 3 times; step cancelled")
+                return {"ok": False, "refused": "refused: wrong approval code 3 times; the step is cancelled"}
+            _log(task_id, op=step["op"], outcome="refused", error="wrong approval code")
+            return {"ok": False, "refused": "refused: wrong approval code (only the user has it)"}
+        else:
+            _STEPS.pop(step_id, None)
+            _DECIDED[step_id] = "used"
+    return execute(step["token"], step["path"], step["op"], step["params"], confirmation, task_id)

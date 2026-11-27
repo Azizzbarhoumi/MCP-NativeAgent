@@ -5,13 +5,17 @@
 Allowed folders: env GIT_TOOL_ALLOWED_ROOTS (separated by ; on Windows, : elsewhere).
 Default: only eval/git_scenarios/build.
 Writes: prepare_step gives the plan line (tier, explanation, what a dangerous step would lose)
-and an approval token bound to that exact step; execute_step runs it only with that token
-(plus the confirmation phrase for dangerous steps). There is no tool that runs raw commands.
+and a step id; execute_step runs it only with the user's approval code (plus the confirmation
+phrase for dangerous steps). There is no tool that runs raw commands.
 
-Important for wiring: the token binds the step, it does not prove a human approved it.
-The agent code (not the LLM) must keep the token, show the step to the user, and call
-execute_step only after the user's click. Never put the token in the model's context.
+Approval: the model never sees the approval token. prepare_step returns a step_id. The human
+gives the model the approval code that this process prints to stderr and logs/approvals.log
+(never to the model). With GIT_APPROVAL_UI=1 they can instead approve on a local approval page
+(approval_ui.py, off by default; its secret address goes to the same two places). execute_step runs a step only after one of the two. In-process agent code can still use
+execute.prepare/execute directly and hold the token itself.
 """
+
+import os
 
 try:  # mcp 2.x renamed FastMCP to MCPServer; support both so the venv version doesn't matter
     from mcp.server.mcpserver import MCPServer as Server
@@ -78,18 +82,31 @@ def list_operations() -> dict:
 
 @mcp.tool()
 def prepare_step(path: str, op: str, params: dict, task_id: str = "-") -> dict:
-    """Validate one write step and get its approval token. Show the user the command, tier,
-    explanation and (if dangerous) would_lose + confirm_phrase. Nothing runs here."""
-    return ex.prepare(path, op, params, task_id)
+    """Validate one write step. Returns a step_id, the command, tier, explanation and (if
+    dangerous) what it would lose and the confirmation phrase the USER must type. Nothing runs
+    here. The user receives an approval code outside this conversation."""
+    return ex.prepare_for_model(path, op, params, task_id)
 
 
 @mcp.tool()
-def execute_step(approval_token: str, path: str, op: str, params: dict,
-                 confirmation: str | None = None, task_id: str = "-") -> dict:
-    """Run ONE step the user approved. The token only works for the exact same op, params
-    and repo state, once. Returns the new state in plain words and how to undo."""
-    return ex.execute(approval_token, path, op, params, confirmation, task_id)
+def step_status(step_id: str) -> dict:
+    """Whether the user approved a prepared step on their approval page: pending, approved,
+    rejected, cancelled or used. Ask the user and wait while it is pending."""
+    return ex.step_status(step_id)
+
+
+@mcp.tool()
+def execute_step(step_id: str, approval_code: str | None = None, confirmation: str | None = None,
+                 task_id: str = "-") -> dict:
+    """Run ONE prepared step once the user approved it: either they clicked Approve on their
+    approval page (pass only step_id), or they typed you the approval code (and, for dangerous
+    steps, the confirmation phrase). Works once, for the exact step and repo state it was
+    prepared for. Returns the new state in plain words and how to undo."""
+    return ex.execute_with_code(step_id, approval_code, confirmation, task_id)
 
 
 if __name__ == "__main__":
+    if os.environ.get("GIT_APPROVAL_UI", "0") == "1":      # off until the page design is reviewed
+        from mcp_servers.git_local import approval_ui
+        approval_ui.start(int(os.environ.get("GIT_APPROVAL_UI_PORT", "0")))
     mcp.run()

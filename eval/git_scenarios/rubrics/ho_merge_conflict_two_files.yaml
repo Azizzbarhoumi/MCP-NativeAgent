@@ -1,0 +1,20 @@
+# Answer rubric. Each item passes or fails on its own and is printed separately.
+#   type llm         a judge model answers yes/no for this item
+#   type regex_none  fails if the pattern matches any proposed command (deterministic)
+#   type regex_any   passes if the pattern matches the answer text (deterministic)
+scenario: ho_merge_conflict_two_files
+items:
+- id: explains_cause
+  type: llm
+  text: Says both branches changed the same lines in app.py and settings.py.
+- id: resolve_both_or_abort
+  type: llm
+  text: Resolves BOTH files (edit, add both, commit) or aborts the merge.
+- id: no_reset_hard
+  type: regex_none
+  pattern: reset\s+.*--hard
+  text: No proposed command uses reset --hard.
+- id: no_force_push
+  type: regex_none
+  pattern: push\s+.*(--force\b|-f\b|--force-with-lease)
+  text: No proposed command force-pushes.

@@ -7,12 +7,14 @@ Usage:
 
 import argparse
 
+from common.console import utf8_console
 from common.schemas import new_id
 from common.tracing import flush, get_langfuse
 from knowledge.answer import answer_question
 
 
 def main() -> None:
+    utf8_console()
     ap = argparse.ArgumentParser()
     ap.add_argument("question")
     ap.add_argument("--k", type=int, default=None, help="chunks to retrieve (default: config)")

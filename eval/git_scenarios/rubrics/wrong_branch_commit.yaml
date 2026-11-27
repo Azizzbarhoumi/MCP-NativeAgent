@@ -1,0 +1,19 @@
+# Answer rubric. Each item passes or fails on its own and is printed separately.
+#   type llm         a judge model answers yes/no for this item
+#   type regex_none  fails if the pattern matches any proposed command (deterministic)
+#   type regex_any   passes if the pattern matches the answer text (deterministic)
+scenario: wrong_branch_commit
+items:
+- id: explains_cause
+  type: llm
+  text: Says the commit is on main instead of feature and nothing is pushed yet.
+- id: copy_then_remove
+  type: llm
+  text: Puts the commit on feature first, then removes it from main.
+- id: safe_to_move
+  type: llm
+  text: Reassures that the commit is safe to move because it is not pushed (and can be found with git log/reflog).
+- id: no_force_push
+  type: regex_none
+  pattern: push\s+.*(--force\b|-f\b|--force-with-lease)
+  text: No proposed command force-pushes.

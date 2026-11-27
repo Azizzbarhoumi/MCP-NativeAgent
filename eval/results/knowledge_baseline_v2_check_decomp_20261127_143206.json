@@ -1,0 +1,2113 @@
+{
+  "mode": "baseline",
+  "prompt": "v2_check_decomp",
+  "judge": "groq",
+  "k": null,
+  "answer_model": "openrouter/openai/gpt-oss-20b",
+  "summary": {
+    "lookup": {
+      "n": 12,
+      "retrieval_hit": 1.0,
+      "full_coverage": 1.0,
+      "correct": 0.9166666666666666,
+      "partial": 0.08333333333333333,
+      "latency_s": 10.009166666666667,
+      "tokens": 4324.166666666667
+    },
+    "all": {
+      "n": 31,
+      "retrieval_hit": 0.967741935483871,
+      "full_coverage": 0.9032258064516129,
+      "correct": 0.8387096774193549,
+      "partial": 0.0967741935483871,
+      "latency_s": 11.346451612903227,
+      "tokens": 5725.935483870968
+    },
+    "exact_match": {
+      "n": 11,
+      "retrieval_hit": 1.0,
+      "full_coverage": 1.0,
+      "correct": 0.8181818181818182,
+      "partial": 0.09090909090909091,
+      "latency_s": 8.473636363636363,
+      "tokens": 5227.454545454545
+    },
+    "multi_hop": {
+      "n": 8,
+      "retrieval_hit": 0.875,
+      "full_coverage": 0.625,
+      "correct": 0.75,
+      "partial": 0.125,
+      "latency_s": 17.3025,
+      "tokens": 8514.0
+    }
+  },
+  "rows": [
+    {
+      "id": "lo01",
+      "type": "lookup",
+      "question": "What is the default timeout for a GitHub Actions job if timeout-minutes is not set?",
+      "expected": "360 minutes.",
+      "answer": "The default timeout for a GitHub Actions job is **360 minutes** if `timeout-minutes` is not set.【1】",
+      "verdict": "correct",
+      "judge_reason": "The answer states the default timeout is 360 minutes, matching the reference.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "7379cb8a-8f5a-5451-ac5e-64e5db674f37",
+          "doc": "github_actions_docs/content/actions/reference/workflows-and-actions/workflow-syntax.md",
+          "section": "About YAML syntax for workflows > `jobs.<job_id>.timeout-minutes`",
+          "score": 0.8133
+        },
+        {
+          "chunk_id": "ce8afff7-45a0-57df-8fa4-066d6498c252",
+          "doc": "github_actions_docs/content/actions/how-tos/troubleshoot-workflows.md",
+          "section": "Initial troubleshooting suggestions > Troubleshooting workflow triggers > Scheduled workflows running at unexpected times",
+          "score": 0.7987
+        },
+        {
+          "chunk_id": "755040e9-eda7-5c07-838b-6c6c1414f46c",
+          "doc": "github_actions_docs/content/actions/tutorials/migrate-to-github-actions/manual-migrations/migrate-from-travis-ci.md",
+          "section": "Introduction > Error handling in GitHub Actions > Script error handling",
+          "score": 0.7839
+        },
+        {
+          "chunk_id": "af414c40-008f-54cb-baa2-fc07546d51bc",
+          "doc": "github_actions_docs/content/actions/reference/workflows-and-actions/events-that-trigger-workflows.md",
+          "section": "About events that trigger workflows > `schedule`",
+          "score": 0.7767
+        },
+        {
+          "chunk_id": "1b8ca86c-1c4e-5741-958f-4532f0063dbc",
+          "doc": "github_actions_docs/content/actions/tutorials/migrate-to-github-actions/manual-migrations/migrate-from-travis-ci.md",
+          "section": "Introduction > Key features in GitHub Actions > Concurrent jobs and execution time",
+          "score": 0.7713
+        }
+      ],
+      "expected_docs": [
+        "github_actions_docs/content/actions/reference/workflows-and-actions/workflow-syntax.md"
+      ],
+      "cited": [
+        1
+      ],
+      "latency_s": 9.83,
+      "tokens": 3071,
+      "judge_tokens": 355,
+      "task_id": "c7eb681b-e638-458f-82fc-ba0b9e3aeada",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "lo02",
+      "type": "lookup",
+      "question": "How many jobs can a matrix generate at most per workflow run?",
+      "expected": "256 jobs per workflow run (GitHub-hosted and self-hosted).",
+      "answer": "A matrix can generate up to **256 jobs per workflow run**【1】.",
+      "verdict": "correct",
+      "judge_reason": "Matches the reference stating 256 jobs per workflow run",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "40afe199-bc1b-546b-b1d5-2264a2937646",
+          "doc": "github_actions_docs/content/actions/reference/workflows-and-actions/workflow-syntax.md",
+          "section": "About YAML syntax for workflows > `jobs.<job_id>.strategy.matrix`",
+          "score": 0.8692
+        },
+        {
+          "chunk_id": "4e213174-88e4-57d4-9cc4-6c18235942a6",
+          "doc": "github_actions_docs/content/actions/how-tos/write-workflows/choose-what-workflows-do/run-job-variations.md",
+          "section": "About matrix strategies > Defining the maximum number of concurrent jobs",
+          "score": 0.811
+        },
+        {
+          "chunk_id": "ec1bcbda-8819-5ed8-8c84-216c3f4735e8",
+          "doc": "github_actions_docs/content/actions/how-tos/write-workflows/choose-what-workflows-do/run-job-variations.md",
+          "section": "About matrix strategies > Adding a matrix strategy to your workflow job",
+          "score": 0.8056
+        },
+        {
+          "chunk_id": "fee56370-3c03-57d5-b9fd-7ea694bc0134",
+          "doc": "github_actions_docs/content/actions/how-tos/reuse-automations/reuse-workflows.md",
+          "section": "Creating a reusable workflow > Using a matrix strategy with a reusable workflow",
+          "score": 0.7994
+        },
+        {
+          "chunk_id": "20c47d99-d50d-536e-ad15-37e030777be4",
+          "doc": "github_actions_docs/content/actions/reference/workflows-and-actions/workflow-syntax.md",
+          "section": "About YAML syntax for workflows > `jobs.<job_id>.strategy.matrix` > Using a multi-dimensional matrix",
+          "score": 0.7917
+        }
+      ],
+      "expected_docs": [
+        "github_actions_docs/content/actions/reference/workflows-and-actions/workflow-syntax.md"
+      ],
+      "cited": [
+        1
+      ],
+      "latency_s": 8.35,
+      "tokens": 4260,
+      "judge_tokens": 348,
+      "task_id": "10f1e624-368b-42a9-bc58-21e06b1e3201",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "lo03",
+      "type": "lookup",
+      "question": "After how many days without access does GitHub evict a cache entry, and what is the default cache size limit per repository?",
+      "expected": "Entries not accessed in over 7 days are removed; the default limit is 10 GB per repository.",
+      "answer": "GitHub evicts a cache entry after **7 days** of no access, and the **default cache size limit per repository is 10 GB**【1】.",
+      "verdict": "correct",
+      "judge_reason": "Provides both facts exactly as in reference with no contradictions.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "5c85a05e-e07f-5933-ab6c-776906b896ed",
+          "doc": "github_actions_docs/content/actions/reference/workflows-and-actions/dependency-caching.md",
+          "section": "`cache` action usage > Usage limits and eviction policy > Default limits",
+          "score": 0.8889
+        },
+        {
+          "chunk_id": "ca6d0819-6a41-5f21-9ca5-a67bf867a9e4",
+          "doc": "github_actions_docs/content/actions/reference/workflows-and-actions/dependency-caching.md",
+          "section": "`cache` action usage > Usage limits and eviction policy",
+          "score": 0.8218
+        },
+        {
+          "chunk_id": "14656c2c-e697-55a5-a982-f577169c16e3",
+          "doc": "docker_docs/content/manuals/build/cache/backends/gha.md",
+          "section": "Synopsis",
+          "score": 0.7991
+        },
+        {
+          "chunk_id": "1cacdef4-afee-52a9-a89a-f5a15581abbb",
+          "doc": "docker_docs/content/manuals/build/cache/backends/gha.md",
+          "section": "Synopsis > Avoid GitHub Actions cache API throttling",
+          "score": 0.7985
+        },
+        {
+          "chunk_id": "d1a71abb-b5f6-5b12-b0ca-3446e6b0775c",
+          "doc": "github_actions_docs/content/actions/reference/workflows-and-actions/dependency-caching.md",
+          "section": "`cache` action usage > Usage limits and eviction policy > Default limits",
+          "score": 0.7966
+        }
+      ],
+      "expected_docs": [
+        "github_actions_docs/content/actions/reference/workflows-and-actions/dependency-caching.md",
+        "github_actions_docs/content/actions/reference/workflows-and-actions/dependency-caching.md"
+      ],
+      "cited": [
+        1
+      ],
+      "latency_s": 7.97,
+      "tokens": 3612,
+      "judge_tokens": 416,
+      "task_id": "6b7cea63-20b5-44dd-ab95-8965d1a247af",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "lo04",
+      "type": "lookup",
+      "question": "What is the default pytest fixture scope and when is such a fixture destroyed?",
+      "expected": "function scope; the fixture is destroyed at the end of the test.",
+      "answer": "The default fixture scope in pytest is `function`, meaning the fixture is created when first requested by a test and is destroyed at the end of that test. [1]",
+      "verdict": "correct",
+      "judge_reason": "Matches both facts: default scope is function and fixture is destroyed at end of test.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "ee3ff01c-e8ce-5ac1-a800-e243f60626f3",
+          "doc": "pytest_docs/doc/en/how-to/fixtures.rst",
+          "section": "How to use fixtures > Scope: sharing fixtures across classes, modules, packages or session > Fixture scopes",
+          "score": 0.8656
+        },
+        {
+          "chunk_id": "c037dafa-13ec-5f38-99ea-83b7f9a6fc47",
+          "doc": "pytest_docs/doc/en/explanation/fixtures.rst",
+          "section": "About fixtures > A note about fixture cleanup",
+          "score": 0.8153
+        },
+        {
+          "chunk_id": "a94b050d-8545-5f5a-b9d2-cdcd6ffa45c4",
+          "doc": "pytest_docs/doc/en/how-to/fixtures.rst",
+          "section": "How to use fixtures > Scope: sharing fixtures across classes, modules, packages or session",
+          "score": 0.8112
+        },
+        {
+          "chunk_id": "5d892583-967c-539b-b399-c0cc229cb490",
+          "doc": "pytest_docs/doc/en/reference/fixtures.rst",
+          "section": "Fixtures reference > Fixture availability > Fixtures from third-party plugins",
+          "score": 0.8073
+        },
+        {
+          "chunk_id": "b97bb95b-30d3-5b5c-89aa-e8736a2a653f",
+          "doc": "pytest_docs/doc/en/how-to/fixtures.rst",
+          "section": "How to use fixtures > Teardown/Cleanup (AKA Fixture finalization)",
+          "score": 0.805
+        }
+      ],
+      "expected_docs": [
+        "pytest_docs/doc/en/how-to/fixtures.rst"
+      ],
+      "cited": [
+        1
+      ],
+      "latency_s": 6.72,
+      "tokens": 3835,
+      "judge_tokens": 403,
+      "task_id": "7fbfa99f-3afd-41c4-be8b-dabf7e6b7568",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "lo05",
+      "type": "lookup",
+      "question": "Where should a pytest fixture be placed so tests in multiple test modules of a directory can use it?",
+      "expected": "In a conftest.py file in that directory.",
+      "answer": "Place the fixture in a **`conftest.py`** file that lives in the directory (or one of its parent directories).  \nFixtures defined in a `conftest.py` are automatically discovered and can be used by any test module in that package without importing them explicitly【2】.",
+      "verdict": "correct",
+      "judge_reason": "States the fixture should be placed in a conftest.py in the directory, matching the reference.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "5d892583-967c-539b-b399-c0cc229cb490",
+          "doc": "pytest_docs/doc/en/reference/fixtures.rst",
+          "section": "Fixtures reference > Fixture availability > Fixtures from third-party plugins",
+          "score": 0.8466
+        },
+        {
+          "chunk_id": "be3a5f97-56db-5fbd-82bd-f1055acec42e",
+          "doc": "pytest_docs/doc/en/reference/fixtures.rst",
+          "section": "Fixtures reference > Fixture availability > `conftest.py`: sharing fixtures across multiple files",
+          "score": 0.845
+        },
+        {
+          "chunk_id": "2bc8397a-bacd-5f7b-b985-311217fdcb64",
+          "doc": "pytest_docs/doc/en/how-to/unittest.rst",
+          "section": "How to use `unittest`-based tests with pytest > Using autouse fixtures and accessing other fixtures",
+          "score": 0.8383
+        },
+        {
+          "chunk_id": "a150d2ff-99a2-5f79-ac1b-761eb870341d",
+          "doc": "pytest_docs/doc/en/how-to/fixtures.rst",
+          "section": "How to use fixtures > Use fixtures in classes and modules with `usefixtures`",
+          "score": 0.8322
+        },
+        {
+          "chunk_id": "586cf12f-059a-54e5-9a7e-b3e19cd3ca94",
+          "doc": "pytest_docs/doc/en/how-to/unittest.rst",
+          "section": "How to use `unittest`-based tests with pytest > Using autouse fixtures and accessing other fixtures",
+          "score": 0.8316
+        }
+      ],
+      "expected_docs": [
+        "pytest_docs/doc/en/how-to/fixtures.rst"
+      ],
+      "cited": [
+        2
+      ],
+      "latency_s": 9.44,
+      "tokens": 5358,
+      "judge_tokens": 461,
+      "task_id": "890a9b18-ff74-4929-b495-0dbdde0e44b3",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "lo06",
+      "type": "lookup",
+      "question": "What does setting strict=True on pytest.mark.xfail change?",
+      "expected": "XPASS (unexpectedly passing) results from that test make the test suite fail.",
+      "answer": "Setting `strict=True` on `pytest.mark.xfail` changes the default behaviour of an *expected‑to‑fail* test so that an **unexpected pass (XPASS)** will cause the entire test run to fail. With the default `strict=False`, a test that passes when it was marked `xfail` is only reported as `xpass` and does not fail the suite, whereas `strict=True` turns that `xpass` into a failure of the test run. [3][4]",
+      "verdict": "correct",
+      "judge_reason": "Matches reference that strict=True makes XPASS cause suite failure.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "87d8ef0d-4b50-5b90-83a7-094bbc74f35e",
+          "doc": "pytest_docs/doc/en/explanation/flaky.rst",
+          "section": "Flaky tests > Related features > Xfail strict",
+          "score": 0.9001
+        },
+        {
+          "chunk_id": "316b43ac-36e2-566e-870f-e22fb1e1007b",
+          "doc": "pytest_docs/doc/en/reference/reference.rst",
+          "section": "API Reference > Configuration Options",
+          "score": 0.8835
+        },
+        {
+          "chunk_id": "469fb86b-aaea-530c-85cb-4d674f908a6d",
+          "doc": "pytest_docs/doc/en/how-to/skipping.rst",
+          "section": "How to use skip and xfail to deal with tests that cannot succeed > XFail: mark test functions as expected to fail > `strict` parameter",
+          "score": 0.8558
+        },
+        {
+          "chunk_id": "8d20ba3a-8344-5c65-8fbf-d9dcb8c386dc",
+          "doc": "pytest_docs/doc/en/reference/reference.rst",
+          "section": "API Reference > Marks > pytest.mark.xfail",
+          "score": 0.8525
+        },
+        {
+          "chunk_id": "54a7e904-3eba-543e-91ec-f386ceb57b7b",
+          "doc": "pytest_docs/doc/en/reference/reference.rst",
+          "section": "API Reference > Marks > pytest.mark.xfail",
+          "score": 0.8469
+        }
+      ],
+      "expected_docs": [
+        "pytest_docs/doc/en/how-to/skipping.rst"
+      ],
+      "cited": [
+        3,
+        4
+      ],
+      "latency_s": 13.96,
+      "tokens": 4348,
+      "judge_tokens": 515,
+      "task_id": "72b7ca50-56a6-4bac-b3d0-084962863cc0",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "lo07",
+      "type": "lookup",
+      "question": "What is the default delay before a Celery task is retried?",
+      "expected": "3 minutes (Task.default_retry_delay); it can be overridden with countdown.",
+      "answer": "The default retry delay is **3 minutes** (180 seconds) before a Celery task is retried.  \n[1][2]",
+      "verdict": "partial",
+      "judge_reason": "Provides the default delay of 3 minutes but omits the reference's note that it can be overridden with countdown.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "96b7c796-46ce-52ff-89c1-e26aec5fa9f8",
+          "doc": "celery_docs/docs/userguide/tasks.rst",
+          "section": "Retrying > Using a custom retry delay",
+          "score": 0.8206
+        },
+        {
+          "chunk_id": "089b8bd8-208c-5f09-ac84-d5557242916d",
+          "doc": "celery_docs/docs/userguide/configuration.rst",
+          "section": "Configuration Directives > Task execution settings > `task_retry_on_worker_lost`",
+          "score": 0.8114
+        },
+        {
+          "chunk_id": "9d5fa4c8-9bd3-5abb-945d-e8b9d445f7b0",
+          "doc": "celery_docs/docs/userguide/application.rst",
+          "section": "Laziness",
+          "score": 0.7822
+        },
+        {
+          "chunk_id": "237236ad-5ee3-535b-a019-88ca8fede90b",
+          "doc": "celery_docs/docs/userguide/configuration.rst",
+          "section": "Configuration Directives > Beat Settings (celery beat) > `beat_cron_starting_deadline`",
+          "score": 0.774
+        },
+        {
+          "chunk_id": "3a8d2633-66bc-50ab-970a-75259d504776",
+          "doc": "celery_docs/docs/userguide/tasks.rst",
+          "section": "Tasks",
+          "score": 0.7718
+        }
+      ],
+      "expected_docs": [
+        "celery_docs/docs/userguide/tasks.rst",
+        "celery_docs/docs/userguide/tasks.rst"
+      ],
+      "cited": [
+        1,
+        2
+      ],
+      "latency_s": 5.01,
+      "tokens": 3636,
+      "judge_tokens": 515,
+      "task_id": "773228e5-0a5c-4295-939c-8f5eb9ffb030",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "lo08",
+      "type": "lookup",
+      "question": "What is the default value of Celery's Task.max_retries and what does None mean?",
+      "expected": "3 by default; None means the task will retry forever.",
+      "answer": "The default value of Celery’s `Task.max_retries` is **3**.  \nA value of **None** disables the retry limit, causing the task to retry forever until it succeeds. [2][4]",
+      "verdict": "correct",
+      "judge_reason": "Matches both the default of 3 and that None means unlimited retries.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "f3a7634d-5f32-5f49-be20-d51621908a80",
+          "doc": "celery_docs/docs/userguide/configuration.rst",
+          "section": "Configuration Directives > Task result backend settings > `result_backend_max_retries`",
+          "score": 0.8298
+        },
+        {
+          "chunk_id": "80d77c9d-c5ae-58e6-a0f3-7e47ff333b9e",
+          "doc": "celery_docs/docs/userguide/tasks.rst",
+          "section": "Retrying > Automatic retry for known exceptions",
+          "score": 0.7761
+        },
+        {
+          "chunk_id": "089b8bd8-208c-5f09-ac84-d5557242916d",
+          "doc": "celery_docs/docs/userguide/configuration.rst",
+          "section": "Configuration Directives > Task execution settings > `task_retry_on_worker_lost`",
+          "score": 0.7725
+        },
+        {
+          "chunk_id": "1a9d6c18-68e8-5572-954d-57fbc3fb15bb",
+          "doc": "celery_docs/docs/userguide/tasks.rst",
+          "section": "List of Options > General",
+          "score": 0.7717
+        },
+        {
+          "chunk_id": "f19b467c-cc99-5d9a-bb47-e9d68c3814e1",
+          "doc": "celery_docs/docs/userguide/configuration.rst",
+          "section": "Configuration Directives > Task settings > `task_repr_maxlevels`",
+          "score": 0.7711
+        }
+      ],
+      "expected_docs": [
+        "celery_docs/docs/userguide/tasks.rst"
+      ],
+      "cited": [
+        2,
+        4
+      ],
+      "latency_s": 9.09,
+      "tokens": 4125,
+      "judge_tokens": 408,
+      "task_id": "a7d11d05-48c2-4d96-a86c-e462f57dd8b8",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "lo09",
+      "type": "lookup",
+      "question": "What do you need to install before using FastAPI's TestClient?",
+      "expected": "httpx.",
+      "answer": "Before you can use FastAPI’s `TestClient`, you must install **httpx** (the HTTP client library that `TestClient` relies on).  \n[1]",
+      "verdict": "correct",
+      "judge_reason": "The answer states that httpx must be installed, matching the reference.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "c4984f17-5256-545f-b3c3-afd13322805e",
+          "doc": "fastapi_docs/docs/en/docs/tutorial/testing.md",
+          "section": "Testing > Using `TestClient`",
+          "score": 0.8313
+        },
+        {
+          "chunk_id": "2040023b-4159-5a5f-b04d-5df6f9af3aaa",
+          "doc": "fastapi_docs/docs/en/docs/reference/testclient.md",
+          "section": "Test Client - `TestClient`",
+          "score": 0.8184
+        },
+        {
+          "chunk_id": "be934e65-06b7-51c8-8d45-190be271c529",
+          "doc": "fastapi_docs/docs/en/docs/tutorial/testing.md",
+          "section": "Testing",
+          "score": 0.8074
+        },
+        {
+          "chunk_id": "96709d61-87e1-51f3-ba0c-3b154aac7b88",
+          "doc": "fastapi_docs/docs/en/docs/index.md",
+          "section": "FastAPI > Installation",
+          "score": 0.7742
+        },
+        {
+          "chunk_id": "604b98a2-5d92-514a-9acb-99da4fc377f2",
+          "doc": "fastapi_docs/docs/en/docs/tutorial/index.md",
+          "section": "Tutorial - User Guide > Install FastAPI",
+          "score": 0.7712
+        },
+        {
+          "chunk_id": "5fec5595-bb6b-567b-843f-1ee279cadbd8",
+          "doc": "fastapi_docs/docs/en/docs/index.md",
+          "section": "FastAPI > Example upgrade > Recap",
+          "score": 0.7364
+        },
+        {
+          "chunk_id": "931e0e6f-c925-598e-b0e7-dd0c9d29cb86",
+          "doc": "fastapi_docs/docs/en/docs/advanced/opentelemetry.md",
+          "section": "OpenTelemetry > Run the app",
+          "score": 0.736
+        }
+      ],
+      "expected_docs": [
+        "fastapi_docs/docs/en/docs/tutorial/testing.md"
+      ],
+      "cited": [
+        1
+      ],
+      "latency_s": 17.09,
+      "tokens": 5974,
+      "judge_tokens": 363,
+      "task_id": "43654ac3-cb96-4653-a7ad-48346ead3852",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": true,
+      "sub_questions": [
+        "FastAPI TestClient installation requirements",
+        "Requests library installation for FastAPI TestClient"
+      ]
+    },
+    {
+      "id": "lo10",
+      "type": "lookup",
+      "question": "How do you replace a dependency with a fake one when testing a FastAPI app?",
+      "expected": "Use app.dependency_overrides: a dict with the original dependency as key and the override function as value.",
+      "answer": "To replace a real dependency with a fake one while testing a FastAPI application, use the `app.dependency_overrides` dictionary.  \n1. **Define a fake dependency** that returns the value you want for the test.  \n2. **Assign it to the original dependency** in the `app.dependency_overrides` dict before the test runs.  \n   ```python\n   app.dependency_overrides[real_dependency] = fake_dependency\n   ```  \n   This tells FastAPI to call `fake_dependency` instead of `real_dependency` for any path operation that uses it (or any sub‑dependencies it may have) [1].  \n3. **Run the test** (e.g., with `TestClient` or any other test framework).  \n4. **Reset the overrides** after the test by clearing the dict:  \n   ```python\n   app.dependency_overrides = {}\n   ```  \n   This restores the original behaviour for subsequent tests or for the application itself [1].  \n\nThis approach is used for scenarios such as mocking an external authentication provider, where the real dependency would otherwise make network calls or incur costs [8]. The documentation also notes that you can set the override at the beginning of a test function and reset it at the end, keeping the override local to that test [1].",
+      "verdict": "correct",
+      "judge_reason": "The answer correctly states using app.dependency_overrides with the original dependency as key and the fake as value, matching the reference.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "835fcb91-f851-583f-ad1d-f862df643f6f",
+          "doc": "fastapi_docs/docs/en/docs/advanced/testing-dependencies.md",
+          "section": "Testing Dependencies with Overrides > Overriding dependencies during testing > Use the `app.dependency_overrides` attribute",
+          "score": 0.7941
+        },
+        {
+          "chunk_id": "007962f1-62e5-5975-b7d7-12d91dbbe890",
+          "doc": "fastapi_docs/docs/en/docs/tutorial/dependencies/index.md",
+          "section": "Dependencies > First Steps > Create a dependency, or \"dependable\"",
+          "score": 0.7627
+        },
+        {
+          "chunk_id": "f1ec31a0-5851-522b-b24b-8a1c1fef5634",
+          "doc": "fastapi_docs/docs/en/docs/index.md",
+          "section": "FastAPI > Dependencies > `standard` Dependencies",
+          "score": 0.7516
+        },
+        {
+          "chunk_id": "d8bd812a-559e-57ac-b070-0552652f58f8",
+          "doc": "fastapi_docs/docs/en/docs/tutorial/dependencies/index.md",
+          "section": "Dependencies > **FastAPI** plug-ins",
+          "score": 0.7469
+        },
+        {
+          "chunk_id": "5c7bcabb-69b6-5fd9-b3c2-dec6261102eb",
+          "doc": "fastapi_docs/docs/en/docs/tutorial/dependencies/sub-dependencies.md",
+          "section": "Sub-dependencies > Use the dependency",
+          "score": 0.7448
+        },
+        {
+          "chunk_id": "16b62fe3-2e90-5f95-8043-dc36a0e77c18",
+          "doc": "fastapi_docs/docs/en/docs/advanced/testing-dependencies.md",
+          "section": "Testing Dependencies with Overrides > Overriding dependencies during testing",
+          "score": 0.7537
+        },
+        {
+          "chunk_id": "c4984f17-5256-545f-b3c3-afd13322805e",
+          "doc": "fastapi_docs/docs/en/docs/tutorial/testing.md",
+          "section": "Testing > Using `TestClient`",
+          "score": 0.7971
+        },
+        {
+          "chunk_id": "d5958184-173a-57d6-960d-45eb17566b8e",
+          "doc": "fastapi_docs/docs/en/docs/advanced/testing-dependencies.md",
+          "section": "Testing Dependencies with Overrides > Overriding dependencies during testing > Use cases: external service",
+          "score": 0.7421
+        }
+      ],
+      "expected_docs": [
+        "fastapi_docs/docs/en/docs/advanced/testing-dependencies.md"
+      ],
+      "cited": [
+        1,
+        8
+      ],
+      "latency_s": 9.07,
+      "tokens": 5618,
+      "judge_tokens": 650,
+      "task_id": "30b748fd-e818-40d4-86e0-f04282253678",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": true,
+      "sub_questions": [
+        "FastAPI dependency override in tests",
+        "pytest fixture for FastAPI test client"
+      ]
+    },
+    {
+      "id": "lo11",
+      "type": "lookup",
+      "question": "How do you make a Docker build skip unnecessary files in the build context?",
+      "expected": "Create a .dockerignore file in the root of the build context.",
+      "answer": "To exclude files that aren’t needed for the build, create a **`.dockerignore`** file in the root of your build context and list the patterns you want omitted.  \nThe build client removes any files or directories that match those patterns before sending the context to the builder, which speeds up the build and reduces the amount of data transferred.  \n\nExample `.dockerignore`:\n\n```plaintext\nnode_modules\ntmp*\n```\n\nIf you have multiple Dockerfiles, you can place a Dockerfile‑specific ignore file next to each Dockerfile (e.g., `build.Dockerfile.dockerignore`). A Dockerfile‑specific ignore file takes precedence over the root `.dockerignore` when both exist.  \n\nThese steps ensure that unnecessary files are skipped from the build context.  \n\n[1][4]",
+      "verdict": "correct",
+      "judge_reason": "Provides the same fact about creating a .dockerignore in the root of the build context and adds non‑contradictory details.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "2fe3cc78-d38d-5587-ae43-df5db98d7565",
+          "doc": "docker_docs/content/manuals/build/cache/optimize.md",
+          "section": "Order your layers > Keep the context small",
+          "score": 0.8436
+        },
+        {
+          "chunk_id": "ccb43fb1-4564-5c6b-803d-c44a2d0bffe6",
+          "doc": "docker_docs/content/manuals/build/checks.md",
+          "section": "How build checks work > Skip checks",
+          "score": 0.8141
+        },
+        {
+          "chunk_id": "1edc68d6-57fa-5337-a859-44cc9553922c",
+          "doc": "docker_docs/content/manuals/build/concepts/context.md",
+          "section": "What is a build context? > .dockerignore files",
+          "score": 0.8079
+        },
+        {
+          "chunk_id": "d1ce017f-c9d6-5193-83d9-2a04ab0b29bc",
+          "doc": "docker_docs/content/manuals/build/concepts/context.md",
+          "section": "What is a build context? > .dockerignore files > Filename and location",
+          "score": 0.8012
+        },
+        {
+          "chunk_id": "a4ccc961-0335-5db2-92c4-437886e140f7",
+          "doc": "docker_docs/content/manuals/build/building/multi-stage.md",
+          "section": "Use multi-stage builds > Stop at a specific build stage",
+          "score": 0.7946
+        }
+      ],
+      "expected_docs": [
+        "docker_docs/content/manuals/build/cache/optimize.md"
+      ],
+      "cited": [
+        1,
+        4
+      ],
+      "latency_s": 13.26,
+      "tokens": 3945,
+      "judge_tokens": 550,
+      "task_id": "dbff27d9-ba25-4638-88ae-98a60d0b94a9",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "lo12",
+      "type": "lookup",
+      "question": "Can the retention-days of an uploaded artifact exceed the repository's retention limit?",
+      "expected": "No, retention-days cannot exceed the limit set by the repository, organization, or enterprise.",
+      "answer": "No – the `retention-days` value you set on an uploaded artifact cannot be larger than the retention limit configured for the repository, organization, or enterprise. [1]",
+      "verdict": "correct",
+      "judge_reason": "Matches reference statement exactly with no contradictions.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "f31e0aef-87fd-5b2d-959e-bb14086eb463",
+          "doc": "github_actions_docs/content/actions/tutorials/store-and-share-data.md",
+          "section": "Prerequisites > Configuring a custom artifact retention period",
+          "score": 0.8483
+        },
+        {
+          "chunk_id": "d629c5a7-c097-55a8-96e7-f26a5253affc",
+          "doc": "github_actions_docs/content/actions/reference/limits.md",
+          "section": "Existing system limits",
+          "score": 0.7712
+        },
+        {
+          "chunk_id": "5c85a05e-e07f-5933-ab6c-776906b896ed",
+          "doc": "github_actions_docs/content/actions/reference/workflows-and-actions/dependency-caching.md",
+          "section": "`cache` action usage > Usage limits and eviction policy > Default limits",
+          "score": 0.7388
+        },
+        {
+          "chunk_id": "d1a71abb-b5f6-5b12-b0ca-3446e6b0775c",
+          "doc": "github_actions_docs/content/actions/reference/workflows-and-actions/dependency-caching.md",
+          "section": "`cache` action usage > Usage limits and eviction policy > Default limits",
+          "score": 0.7358
+        },
+        {
+          "chunk_id": "eeebc48c-859d-50ce-aa32-fc8980db4db8",
+          "doc": "github_actions_docs/content/actions/reference/workflows-and-actions/dependency-caching.md",
+          "section": "`cache` action usage > Usage limits and eviction policy > Increasing cache size",
+          "score": 0.7182
+        }
+      ],
+      "expected_docs": [
+        "github_actions_docs/content/actions/tutorials/store-and-share-data.md"
+      ],
+      "cited": [
+        1
+      ],
+      "latency_s": 10.32,
+      "tokens": 4108,
+      "judge_tokens": 399,
+      "task_id": "55723ffa-8063-4889-8deb-4bd68be6ef7d",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "ex01",
+      "type": "exact_match",
+      "question": "What does pytest exit code 4 mean?",
+      "expected": "pytest command line usage error, including a plugin that cannot be found or a conftest.py that fails to import.",
+      "answer": "Exit code 4 indicates a **pytest command‑line usage error** – for example, a plugin that cannot be found or a `conftest.py` that fails to import. [1]",
+      "verdict": "correct",
+      "judge_reason": "Matches reference exactly with no contradictions.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "0e5d993b-bfe9-5a42-88d7-6ee9fd66d319",
+          "doc": "pytest_docs/doc/en/reference/exit-codes.rst",
+          "section": "Exit codes",
+          "score": 0.8239
+        },
+        {
+          "chunk_id": "009d41c7-3d90-5d67-bfc2-ac7241c37cd6",
+          "doc": "pytest_docs/doc/en/reference/reference.rst",
+          "section": "API Reference > Functions > pytest.exit",
+          "score": 0.8188
+        },
+        {
+          "chunk_id": "5253a6d5-a174-5723-9969-2bc35a3e562a",
+          "doc": "pytest_docs/doc/en/reference/reference.rst",
+          "section": "API Reference > Configuration Options",
+          "score": 0.7587
+        },
+        {
+          "chunk_id": "521f469a-49a1-59f6-8990-33d375bc8415",
+          "doc": "pytest_docs/doc/en/how-to/output.rst",
+          "section": "Managing pytest's output > Verbosity",
+          "score": 0.7478
+        },
+        {
+          "chunk_id": "93f43e0a-c348-51b7-b95e-4d07abea49f1",
+          "doc": "pytest_docs/doc/en/reference/reference.rst",
+          "section": "API Reference > Command-line Flags > Complete Help Output",
+          "score": 0.744
+        }
+      ],
+      "expected_docs": [
+        "pytest_docs/doc/en/reference/exit-codes.rst"
+      ],
+      "cited": [
+        1
+      ],
+      "latency_s": 6.42,
+      "tokens": 3833,
+      "judge_tokens": 409,
+      "task_id": "5809df2f-8b5f-431d-8432-1f8c5884f2dc",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "ex02",
+      "type": "exact_match",
+      "question": "Which secret or variable must be set to true to enable step debug logging in GitHub Actions?",
+      "expected": "ACTIONS_STEP_DEBUG set to true.",
+      "answer": "To enable step‑debug logging you must set the secret or variable **`ACTIONS_STEP_DEBUG`** to `true` in the repository that contains the workflow. [1]",
+      "verdict": "correct",
+      "judge_reason": "Matches reference by stating ACTIONS_STEP_DEBUG must be set to true.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "dc504bad-ecb9-5f53-9f0b-e569afebad1c",
+          "doc": "github_actions_docs/content/actions/how-tos/monitor-workflows/enable-debug-logging.md",
+          "section": "Enabling runner diagnostic logging > Enabling step debug logging",
+          "score": 0.8523
+        },
+        {
+          "chunk_id": "9cf3027c-09cf-59e8-9b17-49d08e3f4636",
+          "doc": "github_actions_docs/content/actions/how-tos/troubleshoot-workflows.md",
+          "section": "Initial troubleshooting suggestions > Using > Enabling debug logging",
+          "score": 0.7959
+        },
+        {
+          "chunk_id": "ab973e6a-fe5b-5951-8d7f-27bf60a1aab9",
+          "doc": "github_actions_docs/content/actions/how-tos/monitor-workflows/enable-debug-logging.md",
+          "section": "",
+          "score": 0.794
+        },
+        {
+          "chunk_id": "4ce3b371-0bb0-5321-83c0-a67abf71c4c3",
+          "doc": "github_actions_docs/content/actions/reference/workflows-and-actions/workflow-commands.md",
+          "section": "About workflow commands > Setting a debug message",
+          "score": 0.7834
+        },
+        {
+          "chunk_id": "0d84f1e8-c4cb-5060-9aac-f531aad0e4de",
+          "doc": "github_actions_docs/content/actions/reference/workflows-and-actions/variables.md",
+          "section": "Default environment variables",
+          "score": 0.7692
+        }
+      ],
+      "expected_docs": [
+        "github_actions_docs/content/actions/how-tos/monitor-workflows/enable-debug-logging.md"
+      ],
+      "cited": [
+        1
+      ],
+      "latency_s": 6.61,
+      "tokens": 3750,
+      "judge_tokens": 383,
+      "task_id": "de90671d-2a97-423d-b5ab-2972308cf574",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "ex03",
+      "type": "exact_match",
+      "question": "Which secret or variable enables runner diagnostic logging in GitHub Actions?",
+      "expected": "ACTIONS_RUNNER_DEBUG set to true.",
+      "answer": "The secret or variable that enables runner diagnostic logging is `ACTIONS_RUNNER_DEBUG` set to `true`【1】.",
+      "verdict": "correct",
+      "judge_reason": "Matches reference exactly, stating ACTIONS_RUNNER_DEBUG set to true.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "bb6135c0-85da-5370-a249-891a712409ed",
+          "doc": "github_actions_docs/content/actions/how-tos/monitor-workflows/enable-debug-logging.md",
+          "section": "Enabling runner diagnostic logging",
+          "score": 0.816
+        },
+        {
+          "chunk_id": "ab973e6a-fe5b-5951-8d7f-27bf60a1aab9",
+          "doc": "github_actions_docs/content/actions/how-tos/monitor-workflows/enable-debug-logging.md",
+          "section": "",
+          "score": 0.7995
+        },
+        {
+          "chunk_id": "dc504bad-ecb9-5f53-9f0b-e569afebad1c",
+          "doc": "github_actions_docs/content/actions/how-tos/monitor-workflows/enable-debug-logging.md",
+          "section": "Enabling runner diagnostic logging > Enabling step debug logging",
+          "score": 0.7977
+        },
+        {
+          "chunk_id": "8611216d-53ab-5d05-b909-f370792eef5e",
+          "doc": "github_actions_docs/content/actions/reference/security/secure-use.md",
+          "section": "Writing workflows > GitHub's security features > Being aware of security vulnerabilities in actions you use > Monitoring the actions in your workflows",
+          "score": 0.7684
+        },
+        {
+          "chunk_id": "0d84f1e8-c4cb-5060-9aac-f531aad0e4de",
+          "doc": "github_actions_docs/content/actions/reference/workflows-and-actions/variables.md",
+          "section": "Default environment variables",
+          "score": 0.7683
+        }
+      ],
+      "expected_docs": [
+        "github_actions_docs/content/actions/how-tos/monitor-workflows/enable-debug-logging.md"
+      ],
+      "cited": [
+        1
+      ],
+      "latency_s": 6.48,
+      "tokens": 3970,
+      "judge_tokens": 363,
+      "task_id": "5fb17fd9-834b-47d7-acf1-9dd520f5e091",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "ex04",
+      "type": "exact_match",
+      "question": "What exit code does `ruff check` return when violations were found?",
+      "expected": "1.",
+      "answer": "`ruff check` returns an exit code of **`1`** when violations are found. [1]",
+      "verdict": "correct",
+      "judge_reason": "Matches reference that exit code is 1",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "ce8496be-ace6-56e8-8176-aa1451b1b878",
+          "doc": "ruff_docs/docs/linter.md",
+          "section": "The Ruff Linter > Exit codes",
+          "score": 0.8614
+        },
+        {
+          "chunk_id": "9c1b829f-a566-51d1-9aed-499ed2494d61",
+          "doc": "ruff_docs/docs/formatter.md",
+          "section": "The Ruff Formatter > Exit codes",
+          "score": 0.8019
+        },
+        {
+          "chunk_id": "54115c8d-ea99-58fa-a4f3-f816487c2bd4",
+          "doc": "ruff_docs/docs/linter.md",
+          "section": "The Ruff Linter > Error suppression > Detecting unused suppressions",
+          "score": 0.7809
+        },
+        {
+          "chunk_id": "9a043713-6f7a-5497-b31e-5073d871f059",
+          "doc": "ruff_docs/docs/linter.md",
+          "section": "The Ruff Linter > `ruff check`",
+          "score": 0.7752
+        },
+        {
+          "chunk_id": "c85e135d-cdde-5135-9e0c-2a19f3c3670e",
+          "doc": "ruff_docs/docs/faq.md",
+          "section": "FAQ > Ruff tried to fix something — but it broke my code. What's going on?",
+          "score": 0.7593
+        }
+      ],
+      "expected_docs": [
+        "ruff_docs/docs/linter.md"
+      ],
+      "cited": [
+        1
+      ],
+      "latency_s": 6.43,
+      "tokens": 3435,
+      "judge_tokens": 344,
+      "task_id": "2b2fb01c-e90e-4a24-b607-1987dfe6d0e9",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "ex05",
+      "type": "exact_match",
+      "question": "What exit code does `ruff format --check` return if one or more files would be reformatted?",
+      "expected": "1.",
+      "answer": "`ruff format --check` returns exit code **1** if one or more files would be reformatted.  \nThis is the second case listed for the `--check` mode in the exit‑code table. [1]",
+      "verdict": "correct",
+      "judge_reason": "Matches reference that exit code is 1",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "9c1b829f-a566-51d1-9aed-499ed2494d61",
+          "doc": "ruff_docs/docs/formatter.md",
+          "section": "The Ruff Formatter > Exit codes",
+          "score": 0.8368
+        },
+        {
+          "chunk_id": "9a043713-6f7a-5497-b31e-5073d871f059",
+          "doc": "ruff_docs/docs/linter.md",
+          "section": "The Ruff Linter > `ruff check`",
+          "score": 0.7851
+        },
+        {
+          "chunk_id": "ce8496be-ace6-56e8-8176-aa1451b1b878",
+          "doc": "ruff_docs/docs/linter.md",
+          "section": "The Ruff Linter > Exit codes",
+          "score": 0.7783
+        },
+        {
+          "chunk_id": "1dd78fe2-68e4-5844-8159-5f58956a496b",
+          "doc": "ruff_docs/docs/formatter.md",
+          "section": "The Ruff Formatter > `ruff format`",
+          "score": 0.778
+        },
+        {
+          "chunk_id": "c9f4f019-bc52-50da-9b67-209ee797dec8",
+          "doc": "ruff_docs/docs/configuration.md",
+          "section": "Configuring Ruff > Python file discovery",
+          "score": 0.7585
+        }
+      ],
+      "expected_docs": [
+        "ruff_docs/docs/formatter.md"
+      ],
+      "cited": [
+        1
+      ],
+      "latency_s": 6.57,
+      "tokens": 3849,
+      "judge_tokens": 371,
+      "task_id": "dc08b8f6-5e90-4f7e-81c7-b452d97381ac",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "ex06",
+      "type": "exact_match",
+      "question": "Which flag makes Ruff apply unsafe fixes too?",
+      "expected": "--unsafe-fixes together with --fix (or the unsafe-fixes setting).",
+      "answer": "The flag that enables Ruff to apply unsafe fixes is `--unsafe-fixes`【1】【2】.",
+      "verdict": "partial",
+      "judge_reason": "Mentions --unsafe-fixes but omits that it must be used with --fix or the setting.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "d7fa5052-62ee-569c-aa57-7e04d21f18ca",
+          "doc": "ruff_docs/docs/linter.md",
+          "section": "The Ruff Linter > Fixes > Fix safety",
+          "score": 0.8476
+        },
+        {
+          "chunk_id": "c85e135d-cdde-5135-9e0c-2a19f3c3670e",
+          "doc": "ruff_docs/docs/faq.md",
+          "section": "FAQ > Ruff tried to fix something — but it broke my code. What's going on?",
+          "score": 0.8449
+        },
+        {
+          "chunk_id": "8879f4bd-b7e4-567a-a356-b9f2def100c1",
+          "doc": "ruff_docs/docs/editors/features.md",
+          "section": "Features > Code Actions > Fix Safety",
+          "score": 0.8384
+        },
+        {
+          "chunk_id": "70335ca1-ac98-5286-9f3e-6a8d2e70ed6b",
+          "doc": "ruff_docs/docs/linter.md",
+          "section": "The Ruff Linter > Fixes > Fix safety",
+          "score": 0.8233
+        },
+        {
+          "chunk_id": "a5e7d31a-36b3-5c8c-a988-b99873e447cd",
+          "doc": "ruff_docs/docs/linter.md",
+          "section": "The Ruff Linter > Fixes > Fix safety",
+          "score": 0.7992
+        }
+      ],
+      "expected_docs": [
+        "ruff_docs/docs/linter.md"
+      ],
+      "cited": [
+        1,
+        2
+      ],
+      "latency_s": 6.84,
+      "tokens": 3950,
+      "judge_tokens": 435,
+      "task_id": "c433d183-3391-4d94-ba04-6b0a716f16d1",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "ex07",
+      "type": "exact_match",
+      "question": "How do you suppress Ruff rule F841 on a single line?",
+      "expected": "Add `# noqa: F841` at the end of the line.",
+      "answer": "Add a line‑level suppression comment for the rule, e.g.:\n\n```python\nx = 1  # noqa: F841\n```\n\nThis tells Ruff to ignore the `F841` (unused variable) violation on that single line. [3]",
+      "verdict": "correct",
+      "judge_reason": "Provides the same # noqa: F841 line suppression as the reference.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "142799bc-c0ae-5123-9469-dd01c0d5106d",
+          "doc": "ruff_docs/docs/linter.md",
+          "section": "The Ruff Linter > Error suppression > Comments > Line-level",
+          "score": 0.7874
+        },
+        {
+          "chunk_id": "604ef6b1-7dd0-5eae-bb22-1bc934145f3d",
+          "doc": "ruff_docs/docs/linter.md",
+          "section": "The Ruff Linter > Error suppression > Comments > Block-level",
+          "score": 0.7852
+        },
+        {
+          "chunk_id": "c253d0ee-18fd-503e-8eac-0328173f55c3",
+          "doc": "ruff_docs/docs/linter.md",
+          "section": "The Ruff Linter > Error suppression > Comments > Line-level",
+          "score": 0.7845
+        },
+        {
+          "chunk_id": "b3ecff51-d6c7-55c4-a822-d9c966c7856e",
+          "doc": "ruff_docs/docs/linter.md",
+          "section": "The Ruff Linter > Error suppression > Configuration",
+          "score": 0.7732
+        },
+        {
+          "chunk_id": "215e1b6b-416c-5682-b54f-8c6e92d9fddd",
+          "doc": "ruff_docs/docs/formatter.md",
+          "section": "The Ruff Formatter > Format suppression",
+          "score": 0.7708
+        }
+      ],
+      "expected_docs": [
+        "ruff_docs/docs/linter.md"
+      ],
+      "cited": [
+        3
+      ],
+      "latency_s": 11.33,
+      "tokens": 4551,
+      "judge_tokens": 401,
+      "task_id": "4bbf0c69-1b14-479a-882b-e03f19dc807e",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "ex08",
+      "type": "exact_match",
+      "question": "Which pytest command stops the run after two failures?",
+      "expected": "pytest --maxfail=2",
+      "answer": "The command is:\n\n```\npytest --maxfail=2\n```\n\nwhich stops the test run after two failures. [1]",
+      "verdict": "correct",
+      "judge_reason": "The answer exactly matches the reference command and adds no contradictory information.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "ed6d81ee-8e35-58af-8ea5-7da146cc93a9",
+          "doc": "pytest_docs/doc/en/how-to/failures.rst",
+          "section": "How to handle test failures > Stopping after the first (or N) failures",
+          "score": 0.8551
+        },
+        {
+          "chunk_id": "917d1155-670c-53a4-a13f-9c3f14ffbfe6",
+          "doc": "pytest_docs/doc/en/how-to/cache.rst",
+          "section": "How to re-run failed tests and maintain state between test runs > Rerunning only failures or failures first",
+          "score": 0.8364
+        },
+        {
+          "chunk_id": "59c3c8d4-ff1c-55c4-b849-8784992b9a60",
+          "doc": "pytest_docs/doc/en/how-to/cache.rst",
+          "section": "How to re-run failed tests and maintain state between test runs > Rerunning only failures or failures first",
+          "score": 0.8304
+        },
+        {
+          "chunk_id": "3e58dada-c9b7-566a-bfaf-7244e6c78152",
+          "doc": "pytest_docs/doc/en/how-to/cache.rst",
+          "section": "How to re-run failed tests and maintain state between test runs > Rerunning only failures or failures first",
+          "score": 0.8108
+        },
+        {
+          "chunk_id": "46c8f3b7-7288-580f-8263-7b5fb5f3f64f",
+          "doc": "pytest_docs/doc/en/how-to/cache.rst",
+          "section": "How to re-run failed tests and maintain state between test runs > Usage",
+          "score": 0.8025
+        }
+      ],
+      "expected_docs": [
+        "pytest_docs/doc/en/how-to/failures.rst"
+      ],
+      "cited": [
+        1
+      ],
+      "latency_s": 4.01,
+      "tokens": 4125,
+      "judge_tokens": 354,
+      "task_id": "e8b5e1e7-fe61-4c91-8dbf-20ce2d5088d6",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "ex09",
+      "type": "exact_match",
+      "question": "Which pytest command lists the 10 slowest tests longer than 1 second?",
+      "expected": "pytest --durations=10 --durations-min=1.0",
+      "answer": "The command is:\n\n```\npytest --durations=10 --durations-min=1.0\n```\n\nThis lists the 10 slowest tests whose duration is longer than 1 second. [1]",
+      "verdict": "correct",
+      "judge_reason": "The assistant provides the exact command matching the reference with no contradictions.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "1b6d9174-1b90-5f5d-8885-c0dd4900c914",
+          "doc": "pytest_docs/doc/en/how-to/usage.rst",
+          "section": "How to invoke pytest > Profiling test execution duration",
+          "score": 0.8569
+        },
+        {
+          "chunk_id": "04631ad3-6ced-5bd1-bdb4-6c7a12114c9c",
+          "doc": "pytest_docs/doc/en/how-to/usage.rst",
+          "section": "How to invoke pytest > Specifying which tests to run",
+          "score": 0.7937
+        },
+        {
+          "chunk_id": "a25ed35c-c080-5b21-a7b5-0d0eaf4fd268",
+          "doc": "pytest_docs/doc/en/reference/reference.rst",
+          "section": "API Reference > Configuration Options",
+          "score": 0.7678
+        },
+        {
+          "chunk_id": "915dd6ad-4ac5-5f16-8cb4-367d23024fbd",
+          "doc": "pytest_docs/doc/en/reference/reference.rst",
+          "section": "API Reference > Global Variables",
+          "score": 0.7677
+        },
+        {
+          "chunk_id": "b10f84f0-260c-5eef-8329-2d99b6919dd2",
+          "doc": "pytest_docs/doc/en/how-to/mark.rst",
+          "section": "How to mark test functions with attributes > Registering marks",
+          "score": 0.7643
+        }
+      ],
+      "expected_docs": [
+        "pytest_docs/doc/en/how-to/usage.rst"
+      ],
+      "cited": [
+        1
+      ],
+      "latency_s": 4.72,
+      "tokens": 3549,
+      "judge_tokens": 374,
+      "task_id": "971a0fef-16a1-4b79-ae67-4580b43368ea",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "ex10",
+      "type": "exact_match",
+      "question": "Which exception does a Celery task catch to clean up before its hard time limit?",
+      "expected": "celery.exceptions.SoftTimeLimitExceeded",
+      "answer": "The task catches the **`SoftTimeLimitExceeded`** exception to perform cleanup before the hard time limit kills it. [1]",
+      "verdict": "correct",
+      "judge_reason": "Matches the reference by stating the SoftTimeLimitExceeded exception is caught.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "b6f5c831-4982-5cbf-8a85-02b5d0bc47ee",
+          "doc": "celery_docs/docs/userguide/configuration.rst",
+          "section": "Configuration Directives > Task execution settings > `task_soft_time_limit`",
+          "score": 0.8108
+        },
+        {
+          "chunk_id": "c57262a3-154d-5ed5-8a5e-c7eb7230c436",
+          "doc": "celery_docs/docs/userguide/tasks.rst",
+          "section": "List of Options > General",
+          "score": 0.81
+        },
+        {
+          "chunk_id": "965b80c5-ec36-5139-bfd9-59e92835dbdf",
+          "doc": "celery_docs/docs/userguide/workers.rst",
+          "section": "Time Limits",
+          "score": 0.7885
+        },
+        {
+          "chunk_id": "438efa09-547c-50ca-9ee3-bcb4585ad0cf",
+          "doc": "celery_docs/docs/userguide/calling.rst",
+          "section": "Connection Error Handling",
+          "score": 0.7783
+        },
+        {
+          "chunk_id": "e6a8c0cb-d6b3-5e48-ba73-c9df02e84b1d",
+          "doc": "celery_docs/docs/userguide/tasks.rst",
+          "section": "Logging > Argument checking",
+          "score": 0.7704
+        }
+      ],
+      "expected_docs": [
+        "celery_docs/docs/userguide/workers.rst"
+      ],
+      "cited": [
+        1
+      ],
+      "latency_s": 5.22,
+      "tokens": 4288,
+      "judge_tokens": 365,
+      "task_id": "e882afe3-7c9f-46bc-a630-d732f4f5ef0e",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "ex11",
+      "type": "exact_match",
+      "question": "What Dockerfile RUN line caches pip downloads between builds?",
+      "expected": "RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt",
+      "answer": "The Dockerfile line that is used to install the Python dependencies (and is the one that Docker can cache between builds) is:\n\n```\nRUN pip install --no-cache-dir --upgrade -r /code/requirements.txt\n```\n\n[4] shows this exact `RUN` instruction in the FastAPI example Dockerfile.  \nThe passage explains that copying the `requirements.txt` file first allows Docker to reuse the layer that runs this `RUN` instruction when the file hasn’t changed, thereby caching the pip install step.  \n\nWhat the passages do not explicitly state is that this `RUN` line *by itself* caches pip downloads; they only describe how Docker’s layer caching can be leveraged by placing the `RUN` after a copy of a rarely‑changed file.",
+      "verdict": "incorrect",
+      "judge_reason": "The answer gives a different RUN command without the cache mount, contradicting the reference.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "8401e423-0dc0-555b-a891-f8f18e382d09",
+          "doc": "docker_docs/content/manuals/build/building/best-practices.md",
+          "section": "Use multi-stage builds > Dockerfile instructions > RUN > apt-get",
+          "score": 0.7899
+        },
+        {
+          "chunk_id": "1f52f78a-7d60-5756-9514-ac44bdb792c6",
+          "doc": "docker_docs/content/manuals/build/cache/optimize.md",
+          "section": "Order your layers > Use cache mounts",
+          "score": 0.7858
+        },
+        {
+          "chunk_id": "bb3bb296-94b3-57a3-884a-95be1caac5f2",
+          "doc": "docker_docs/content/manuals/build/cache/invalidation.md",
+          "section": "General rules > RUN instructions",
+          "score": 0.7819
+        },
+        {
+          "chunk_id": "d3340e19-b936-57a9-bf27-6d4701a6bdf1",
+          "doc": "fastapi_docs/docs/en/docs/deployment/docker.md",
+          "section": "FastAPI in Containers - Docker > Build a Docker Image for FastAPI > Dockerfile",
+          "score": 0.7743
+        },
+        {
+          "chunk_id": "4327effd-2166-55a5-af46-fc8c3918ee5b",
+          "doc": "fastapi_docs/docs/en/docs/deployment/docker.md",
+          "section": "FastAPI in Containers - Docker > Build a Docker Image for FastAPI > Dockerfile > Docker Cache",
+          "score": 0.7716
+        },
+        {
+          "chunk_id": "14f86331-8001-5d96-8ebf-3e557e7872d6",
+          "doc": "github_actions_docs/content/actions/tutorials/build-and-test-code/python.md",
+          "section": "Introduction > Installing dependencies > Caching Dependencies",
+          "score": 0.764
+        },
+        {
+          "chunk_id": "9bf182ee-4193-5e82-b612-f9c58d476844",
+          "doc": "github_actions_docs/content/actions/tutorials/migrate-to-github-actions/manual-migrations/migrate-from-circleci.md",
+          "section": "Introduction > Caching > CircleCI syntax for caching",
+          "score": 0.7196
+        },
+        {
+          "chunk_id": "5f0368ea-5e30-5e0d-a8a9-83b41b7a5022",
+          "doc": "github_actions_docs/content/actions/tutorials/build-and-test-code/powershell.md",
+          "section": "Introduction > Installing dependencies > Caching dependencies",
+          "score": 0.7173
+        },
+        {
+          "chunk_id": "6b83dc06-d178-55f6-aad7-8c9b96efe69d",
+          "doc": "docker_docs/content/manuals/build/cache/optimize.md",
+          "section": "Order your layers > Use cache mounts",
+          "score": 0.0295
+        }
+      ],
+      "expected_docs": [
+        "docker_docs/content/manuals/build/cache/optimize.md"
+      ],
+      "cited": [
+        4
+      ],
+      "latency_s": 28.58,
+      "tokens": 18202,
+      "judge_tokens": 561,
+      "task_id": "645bcd4b-3f94-44d7-a37b-6f0f6ed298a0",
+      "retried": true,
+      "refused_by_checker": false,
+      "unsupported_first": [
+        "The Dockerfile line that caches pip downloads between builds is the RUN instruction that does not use the --no-cache-dir flag",
+        "This line is shown in the example Dockerfile in the FastAPI documentation [4]",
+        "does not answer the question: The answer incorrectly claims that the RUN line without --no-cache-dir caches pip downloads, but the example Dockerfile actually uses --no-cache-dir, which disables caching."
+      ],
+      "decomposed": true,
+      "sub_questions": [
+        "Dockerfile RUN pip install --cache-dir to cache downloads between builds",
+        "pip default cache directory location"
+      ]
+    },
+    {
+      "id": "mu01",
+      "type": "multi_hop",
+      "question": "A CI job runs pytest but finds no test files. What exit code does pytest return, and which workflow step setting lets the job still pass when that step fails?",
+      "expected": "Exit code 5 (no tests were collected); set continue-on-error: true on the step.",
+      "answer": "Pytest returns exit code 5 when it finds no test files [1].  \nIn a GitHub Actions workflow you can keep the job from failing by setting the step’s `continue-on-error` option [7].",
+      "verdict": "correct",
+      "judge_reason": "Provides both the exit code 5 and the continue-on-error setting, matching the reference.",
+      "hit": true,
+      "coverage": 0.5,
+      "retrieved": [
+        {
+          "chunk_id": "0e5d993b-bfe9-5a42-88d7-6ee9fd66d319",
+          "doc": "pytest_docs/doc/en/reference/exit-codes.rst",
+          "section": "Exit codes",
+          "score": 0.8137
+        },
+        {
+          "chunk_id": "02bb1eca-c424-5d68-b305-c1467864c570",
+          "doc": "pytest_docs/doc/en/explanation/ci.rst",
+          "section": "CI Pipelines > Rationale",
+          "score": 0.7948
+        },
+        {
+          "chunk_id": "de31d56d-4dbe-5966-8035-ccde46f7a6ee",
+          "doc": "pytest_docs/doc/en/how-to/failures.rst",
+          "section": "How to handle test failures > Using python:library/pdb with pytest > Dropping to pdb at the start of a test",
+          "score": 0.7797
+        },
+        {
+          "chunk_id": "00fe8467-da04-5ab9-8ca3-9caae520bb93",
+          "doc": "pytest_docs/doc/en/how-to/cache.rst",
+          "section": "How to re-run failed tests and maintain state between test runs > Inspecting Cache content",
+          "score": 0.7796
+        },
+        {
+          "chunk_id": "ea543a15-f06e-5c3a-83b6-e03384e619dc",
+          "doc": "pytest_docs/doc/en/reference/reference.rst",
+          "section": "API Reference > Environment Variables",
+          "score": 0.7787
+        },
+        {
+          "chunk_id": "009d41c7-3d90-5d67-bfc2-ac7241c37cd6",
+          "doc": "pytest_docs/doc/en/reference/reference.rst",
+          "section": "API Reference > Functions > pytest.exit",
+          "score": 0.8127
+        },
+        {
+          "chunk_id": "30442901-2073-5a57-903e-ab10f1b4e4ef",
+          "doc": "github_actions_docs/content/actions/tutorials/migrate-to-github-actions/manual-migrations/migrate-from-travis-ci.md",
+          "section": "Introduction > Error handling in GitHub Actions > Job error handling",
+          "score": 0.818
+        },
+        {
+          "chunk_id": "917d1155-670c-53a4-a13f-9c3f14ffbfe6",
+          "doc": "pytest_docs/doc/en/how-to/cache.rst",
+          "section": "How to re-run failed tests and maintain state between test runs > Rerunning only failures or failures first",
+          "score": 0.7897
+        }
+      ],
+      "expected_docs": [
+        "pytest_docs/doc/en/reference/exit-codes.rst",
+        "github_actions_docs/content/actions/reference/workflows-and-actions/workflow-syntax.md"
+      ],
+      "cited": [
+        1,
+        7
+      ],
+      "latency_s": 10.04,
+      "tokens": 5314,
+      "judge_tokens": 444,
+      "task_id": "4a15d2ab-687c-482e-b20a-d9889b21cbdb",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": true,
+      "sub_questions": [
+        "pytest exit code when no tests found",
+        "GitHub Actions step setting to allow job to pass when step fails"
+      ]
+    },
+    {
+      "id": "mu02",
+      "type": "multi_hop",
+      "question": "A pytest suite in GitHub Actions runs for 7 hours on a GitHub-hosted runner. What happens, and what is the default job timeout?",
+      "expected": "GitHub-hosted jobs are limited to 6 hours of execution time, so the job is terminated and fails; the default timeout-minutes is 360.",
+      "answer": "The retrieved documents do not contain the answer.",
+      "verdict": "incorrect",
+      "judge_reason": "declined: answer starts with the 'not found' sentence",
+      "hit": false,
+      "coverage": 0.0,
+      "retrieved": [
+        {
+          "chunk_id": "3e11d89e-84ec-5bdb-95f5-facd170d8642",
+          "doc": "github_actions_docs/content/actions/concepts/runners/github-hosted-runners.md",
+          "section": "Overview of GitHub-hosted runners",
+          "score": 0.7861
+        },
+        {
+          "chunk_id": "11cac85a-aa39-517f-8377-e313c10f0ff8",
+          "doc": "github_actions_docs/content/actions/concepts/runners/github-hosted-runners.md",
+          "section": "Overview of GitHub-hosted runners > Workflow continuity",
+          "score": 0.7824
+        },
+        {
+          "chunk_id": "a17c8798-828b-592d-ae0f-93713415e730",
+          "doc": "github_actions_docs/content/actions/concepts/runners/actions-runner-controller.md",
+          "section": "About",
+          "score": 0.7612
+        },
+        {
+          "chunk_id": "e3463090-106e-59a3-9206-9f40244c0dee",
+          "doc": "github_actions_docs/content/actions/reference/security/secure-use.md",
+          "section": "Writing workflows > GitHub's security features > Hardening for self-hosted runners",
+          "score": 0.761
+        },
+        {
+          "chunk_id": "04623dda-ec0a-5044-b21f-6581edea8f14",
+          "doc": "github_actions_docs/content/actions/get-started/understand-github-actions.md",
+          "section": "Overview > The components of GitHub Actions > Runners",
+          "score": 0.7595
+        }
+      ],
+      "expected_docs": [
+        "github_actions_docs/content/actions/reference/limits.md",
+        "github_actions_docs/content/actions/reference/workflows-and-actions/workflow-syntax.md"
+      ],
+      "cited": [],
+      "latency_s": 13.64,
+      "tokens": 3497,
+      "judge_tokens": 0,
+      "task_id": "56e06291-36c3-4b1b-a773-f059d5539be4",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "mu03",
+      "type": "multi_hop",
+      "question": "In a CI lint step, `ruff check` fails the job. What exit code caused it, and how do you make that step non-blocking in GitHub Actions without changing Ruff's exit code?",
+      "expected": "ruff check exits 1 when violations are found; set continue-on-error: true on the step.",
+      "answer": "The failure is caused by **exit code 1** – Ruff exits with `1` when it finds violations [1].  \nTo keep the GitHub Actions job from failing while still running Ruff, add the `continue-on-error: true` flag to the step that runs `ruff check` [11]. This makes the step non‑blocking without altering Ruff’s exit code.",
+      "verdict": "correct",
+      "judge_reason": "Provides both facts: exit code 1 and using continue-on-error: true.",
+      "hit": true,
+      "coverage": 0.5,
+      "retrieved": [
+        {
+          "chunk_id": "ce8496be-ace6-56e8-8176-aa1451b1b878",
+          "doc": "ruff_docs/docs/linter.md",
+          "section": "The Ruff Linter > Exit codes",
+          "score": 0.8222
+        },
+        {
+          "chunk_id": "13a099a5-bcc7-5327-898a-036bf5c6975d",
+          "doc": "ruff_docs/docs/integrations.md",
+          "section": "Integrations > GitHub Actions",
+          "score": 0.8119
+        },
+        {
+          "chunk_id": "9a043713-6f7a-5497-b31e-5073d871f059",
+          "doc": "ruff_docs/docs/linter.md",
+          "section": "The Ruff Linter > `ruff check`",
+          "score": 0.7872
+        },
+        {
+          "chunk_id": "45fc7e4e-4e9b-5374-9a8a-85d7e819488a",
+          "doc": "ruff_docs/docs/integrations.md",
+          "section": "Integrations > GitHub Actions",
+          "score": 0.771
+        },
+        {
+          "chunk_id": "85ad6ce3-1933-5b77-ac5e-72a5fa55b442",
+          "doc": "ruff_docs/docs/linter.md",
+          "section": "The Ruff Linter > Fixes",
+          "score": 0.7684
+        },
+        {
+          "chunk_id": "c7b4e294-4df2-5940-b73f-3fb3d13ea08b",
+          "doc": "ruff_docs/docs/editors/migration.md",
+          "section": "Migrating from `ruff-lsp` > Examples > `lint.args`",
+          "score": 0.7769
+        },
+        {
+          "chunk_id": "09d11172-fb0c-5e82-ba0f-f991d7e40975",
+          "doc": "github_actions_docs/content/actions/tutorials/migrate-to-github-actions/manual-migrations/migrate-from-travis-ci.md",
+          "section": "Introduction > Migrating phases to steps > GitHub Actions syntax for steps and actions",
+          "score": 0.7478
+        },
+        {
+          "chunk_id": "d7fa5052-62ee-569c-aa57-7e04d21f18ca",
+          "doc": "ruff_docs/docs/linter.md",
+          "section": "The Ruff Linter > Fixes > Fix safety",
+          "score": 0.7683
+        },
+        {
+          "chunk_id": "30442901-2073-5a57-903e-ab10f1b4e4ef",
+          "doc": "github_actions_docs/content/actions/tutorials/migrate-to-github-actions/manual-migrations/migrate-from-travis-ci.md",
+          "section": "Introduction > Error handling in GitHub Actions > Job error handling",
+          "score": 0.0323
+        },
+        {
+          "chunk_id": "1cacdef4-afee-52a9-a89a-f5a15581abbb",
+          "doc": "docker_docs/content/manuals/build/cache/backends/gha.md",
+          "section": "Synopsis > Avoid GitHub Actions cache API throttling",
+          "score": 0.0265
+        },
+        {
+          "chunk_id": "6f27f218-463e-5f73-a776-39ea410de96c",
+          "doc": "github_actions_docs/content/actions/tutorials/build-and-test-code/python.md",
+          "section": "Introduction > Testing your code > Using Ruff to lint and/or format code",
+          "score": 0.0164
+        }
+      ],
+      "expected_docs": [
+        "ruff_docs/docs/linter.md",
+        "github_actions_docs/content/actions/reference/workflows-and-actions/workflow-syntax.md"
+      ],
+      "cited": [
+        1,
+        11
+      ],
+      "latency_s": 20.09,
+      "tokens": 13552,
+      "judge_tokens": 513,
+      "task_id": "834f46d1-0496-4e55-8b32-cd85c69a41a1",
+      "retried": true,
+      "refused_by_checker": false,
+      "unsupported_first": [
+        "does not answer the question: The answer does not explain how to make the step non-blocking."
+      ],
+      "decomposed": true,
+      "sub_questions": [
+        "ruff exit code for lint failures",
+        "GitHub Actions make step non-blocking"
+      ]
+    },
+    {
+      "id": "mu04",
+      "type": "multi_hop",
+      "question": "FastAPI docs suggest a bigger tool for heavy background work. Which tool, and what Celery settings make a task acknowledged only after it runs with prefetching of one task?",
+      "expected": "Celery; task_acks_late = True and worker_prefetch_multiplier = 1.",
+      "answer": "FastAPI recommends using **Celery** for heavy background work that may need to run in separate processes or servers.  \nTo have a task be acknowledged only after it finishes while limiting the worker to prefetch just one task, set the following Celery configuration options:  \n\n- `task_acks_late = True`  \n- `worker_prefetch_multiplier = 1`  \n\nThese settings enable late acknowledgment and restrict the worker to reserve only one task at a time. [1][5]",
+      "verdict": "correct",
+      "judge_reason": "Matches both the tool (Celery) and the two settings exactly.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "5d5b5af7-c35f-5dc1-b109-75377c007155",
+          "doc": "fastapi_docs/docs/en/docs/tutorial/background-tasks.md",
+          "section": "Background Tasks > Caveat",
+          "score": 0.7927
+        },
+        {
+          "chunk_id": "8efb71be-3fcf-5b05-ad56-4667e73b1996",
+          "doc": "fastapi_docs/docs/en/docs/reference/background.md",
+          "section": "Background Tasks - `BackgroundTasks`",
+          "score": 0.7422
+        },
+        {
+          "chunk_id": "5c2555dc-720a-5f8b-b23c-025fbbd08d0a",
+          "doc": "fastapi_docs/docs/en/docs/tutorial/background-tasks.md",
+          "section": "Background Tasks > Dependency Injection",
+          "score": 0.7403
+        },
+        {
+          "chunk_id": "f337e930-c87a-50a3-b9e0-8a021b7fb693",
+          "doc": "celery_docs/docs/userguide/monitoring.rst",
+          "section": "Workers > Management Command-line Utilities (`inspect`/`control`) > Commands",
+          "score": 0.7376
+        },
+        {
+          "chunk_id": "94eaedf9-9c27-5d3b-8035-5daffe5e13e9",
+          "doc": "celery_docs/docs/userguide/optimizing.rst",
+          "section": "Worker Settings > Reserve one task at a time",
+          "score": 0.7372
+        },
+        {
+          "chunk_id": "57bf12fd-f335-56cf-94a6-5d0e8c5b6041",
+          "doc": "celery_docs/docs/userguide/testing.rst",
+          "section": "pytest > Fixtures > Function scope > `celery_app` - Celery app used for testing.",
+          "score": 0.6787
+        },
+        {
+          "chunk_id": "d25429d1-a306-5bfd-9e51-0063b294764f",
+          "doc": "celery_docs/docs/userguide/optimizing.rst",
+          "section": "Worker Settings > Memory Usage",
+          "score": 0.7708
+        },
+        {
+          "chunk_id": "3d52c463-532d-5318-9396-3c5d8085d67e",
+          "doc": "celery_docs/docs/userguide/monitoring.rst",
+          "section": "Workers > Flower: Real-time Celery web-monitor",
+          "score": 0.6725
+        }
+      ],
+      "expected_docs": [
+        "fastapi_docs/docs/en/docs/tutorial/background-tasks.md",
+        "celery_docs/docs/userguide/optimizing.rst"
+      ],
+      "cited": [
+        1,
+        5
+      ],
+      "latency_s": 10.74,
+      "tokens": 5798,
+      "judge_tokens": 481,
+      "task_id": "31ea0a6d-4047-400f-bd21-8e766b1f20f3",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": true,
+      "sub_questions": [
+        "Celery",
+        "Celery task_acks_late and worker_prefetch_multiplier settings"
+      ]
+    },
+    {
+      "id": "mu05",
+      "type": "multi_hop",
+      "question": "To speed up a Python CI pipeline, how do you cache pip in the Dockerfile build, and after how long does GitHub evict unused Actions cache entries?",
+      "expected": "Use RUN --mount=type=cache,target=/root/.cache/pip in the Dockerfile; GitHub removes cache entries not accessed in over 7 days.",
+      "answer": "To speed up a Python CI pipeline you can add a cache mount for pip in the Dockerfile, e.g.:\n\n```dockerfile\nRUN --mount=type=cache,target=/root/.cache/pip \\\n    pip install -r requirements.txt\n```\n\nThis keeps the pip cache between builds and avoids re‑downloading packages [8].\n\nGitHub evicts any Actions cache entry that has not been accessed for **7 days** [9].",
+      "verdict": "correct",
+      "judge_reason": "Provides the same RUN --mount cache instruction and correctly states GitHub evicts caches after 7 days.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "45ef09d4-45ee-56d1-8ffd-1eaf862495b8",
+          "doc": "github_actions_docs/content/actions/tutorials/migrate-to-github-actions/manual-migrations/migrate-from-gitlab-cicd.md",
+          "section": "Introduction > Caching",
+          "score": 0.7869
+        },
+        {
+          "chunk_id": "3d82f750-37a3-5106-8607-a8c543ca67d1",
+          "doc": "docker_docs/content/manuals/build/ci/github-actions/cache.md",
+          "section": "GitHub cache > Enable cache with GitHub Builder {#enable-cache-with-builder} > Cache mounts",
+          "score": 0.7812
+        },
+        {
+          "chunk_id": "bb3bb296-94b3-57a3-884a-95be1caac5f2",
+          "doc": "docker_docs/content/manuals/build/cache/invalidation.md",
+          "section": "General rules > RUN instructions",
+          "score": 0.7808
+        },
+        {
+          "chunk_id": "1cacdef4-afee-52a9-a89a-f5a15581abbb",
+          "doc": "docker_docs/content/manuals/build/cache/backends/gha.md",
+          "section": "Synopsis > Avoid GitHub Actions cache API throttling",
+          "score": 0.7795
+        },
+        {
+          "chunk_id": "dd0714d2-77bb-5e91-bc02-28a0fd687522",
+          "doc": "docker_docs/content/manuals/build/cache/optimize.md",
+          "section": "",
+          "score": 0.7795
+        },
+        {
+          "chunk_id": "14f86331-8001-5d96-8ebf-3e557e7872d6",
+          "doc": "github_actions_docs/content/actions/tutorials/build-and-test-code/python.md",
+          "section": "Introduction > Installing dependencies > Caching Dependencies",
+          "score": 0.7886
+        },
+        {
+          "chunk_id": "ca6d0819-6a41-5f21-9ca5-a67bf867a9e4",
+          "doc": "github_actions_docs/content/actions/reference/workflows-and-actions/dependency-caching.md",
+          "section": "`cache` action usage > Usage limits and eviction policy",
+          "score": 0.7929
+        },
+        {
+          "chunk_id": "1f52f78a-7d60-5756-9514-ac44bdb792c6",
+          "doc": "docker_docs/content/manuals/build/cache/optimize.md",
+          "section": "Order your layers > Use cache mounts",
+          "score": 0.7823
+        },
+        {
+          "chunk_id": "5c85a05e-e07f-5933-ab6c-776906b896ed",
+          "doc": "github_actions_docs/content/actions/reference/workflows-and-actions/dependency-caching.md",
+          "section": "`cache` action usage > Usage limits and eviction policy > Default limits",
+          "score": 0.0315
+        },
+        {
+          "chunk_id": "22b608a5-c915-5af5-8956-c130bb6697ed",
+          "doc": "docker_docs/content/manuals/build/cache/backends/gha.md",
+          "section": "",
+          "score": 0.0308
+        },
+        {
+          "chunk_id": "60e5c6ec-b1da-5ec4-abcd-7df20ce87064",
+          "doc": "github_actions_docs/content/actions/reference/limits.md",
+          "section": "Existing system limits > Workflow file size > Storage limits for all GitHub-hosted runners",
+          "score": 0.0304
+        }
+      ],
+      "expected_docs": [
+        "docker_docs/content/manuals/build/cache/optimize.md",
+        "github_actions_docs/content/actions/reference/workflows-and-actions/dependency-caching.md"
+      ],
+      "cited": [
+        8,
+        9
+      ],
+      "latency_s": 19.79,
+      "tokens": 14295,
+      "judge_tokens": 535,
+      "task_id": "12a6da15-c6f4-4dfc-a949-3de07248a429",
+      "retried": true,
+      "refused_by_checker": false,
+      "unsupported_first": [
+        "does not answer the question: The answer does not provide the specific eviction period requested by the question."
+      ],
+      "decomposed": true,
+      "sub_questions": [
+        "Dockerfile pip cache",
+        "GitHub Actions cache eviction policy"
+      ]
+    },
+    {
+      "id": "mu06",
+      "type": "multi_hop",
+      "question": "A CI run fails because conftest.py cannot be imported. What pytest exit code does that produce, and which command-line flag controls how pytest imports test modules and conftest files?",
+      "expected": "Exit code 4; the --import-mode flag (default prepend).",
+      "answer": "The failure to import a `conftest.py` file is reported by pytest with exit code **4** – “pytest command line usage error, including a plugin that cannot be found or a `conftest.py` that fails to import”【2】.  \n\nThe command‑line flag that controls how pytest imports test modules and `conftest.py` files is **`--import-mode`** (e.g., `--import-mode=prepend`, `--import-mode=append`, or `--import-mode=importlib`)【6】【9】.  \n\n*What is still missing:* The exact wording of the exit‑code enumeration (e.g., `ExitCode.IMPORT_ERROR`) is not shown in the passages, and the default value of the `--import-mode` flag is not specified.",
+      "verdict": "partial",
+      "judge_reason": "Provides correct exit code and flag but omits the default value (prepend) mentioned in the reference.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "aa91dca8-42cc-56a7-922e-c7090b03c8f2",
+          "doc": "pytest_docs/doc/en/how-to/writing_plugins.rst",
+          "section": "Writing plugins > conftest.py: local per-directory plugins",
+          "score": 0.821
+        },
+        {
+          "chunk_id": "0e5d993b-bfe9-5a42-88d7-6ee9fd66d319",
+          "doc": "pytest_docs/doc/en/reference/exit-codes.rst",
+          "section": "Exit codes",
+          "score": 0.8111
+        },
+        {
+          "chunk_id": "1ab8c90d-04a0-50c3-a309-028c6ae9f66b",
+          "doc": "pytest_docs/doc/en/explanation/pythonpath.rst",
+          "section": "pytest import mechanisms and `sys.path`/`PYTHONPATH` > `prepend` and `append` import modes scenarios > Test modules / `conftest.py` files inside packages",
+          "score": 0.8081
+        },
+        {
+          "chunk_id": "b6456f83-f7e6-5551-80ef-41ad3526e9b5",
+          "doc": "pytest_docs/doc/en/explanation/pythonpath.rst",
+          "section": "pytest import mechanisms and `sys.path`/`PYTHONPATH` > `prepend` and `append` import modes scenarios > Standalone test modules / `conftest.py` files",
+          "score": 0.8064
+        },
+        {
+          "chunk_id": "e1936fd5-15e4-535c-81fe-5c150ec1af19",
+          "doc": "pytest_docs/doc/en/reference/reference.rst",
+          "section": "API Reference > Command-line Flags > Complete Help Output",
+          "score": 0.8014
+        },
+        {
+          "chunk_id": "79087c9a-716a-5a6b-88a6-fc497980ee40",
+          "doc": "pytest_docs/doc/en/explanation/pythonpath.rst",
+          "section": "pytest import mechanisms and `sys.path`/`PYTHONPATH` > Import modes",
+          "score": 0.0328
+        },
+        {
+          "chunk_id": "33d63009-4f30-5bc8-a8ef-2ae88748aa4f",
+          "doc": "pytest_docs/doc/en/explanation/goodpractices.rst",
+          "section": "Good Integration Practices > Choosing a test layout > Choosing an import mode",
+          "score": 0.0315
+        },
+        {
+          "chunk_id": "f7b775e6-82dd-507a-80b4-b97510c79b95",
+          "doc": "pytest_docs/doc/en/explanation/pythonpath.rst",
+          "section": "pytest import mechanisms and `sys.path`/`PYTHONPATH` > `prepend` and `append` import modes scenarios",
+          "score": 0.0308
+        },
+        {
+          "chunk_id": "1a15b455-bf8f-5a05-940e-af39718aded3",
+          "doc": "pytest_docs/doc/en/explanation/pythonpath.rst",
+          "section": "pytest import mechanisms and `sys.path`/`PYTHONPATH` > Import modes",
+          "score": 0.0303
+        },
+        {
+          "chunk_id": "2047e49e-8ca5-58f9-aaf0-483a59382e5c",
+          "doc": "pytest_docs/doc/en/explanation/goodpractices.rst",
+          "section": "Good Integration Practices > Choosing a test layout > Tests as part of application code",
+          "score": 0.0294
+        }
+      ],
+      "expected_docs": [
+        "pytest_docs/doc/en/reference/exit-codes.rst",
+        "pytest_docs/doc/en/explanation/pythonpath.rst"
+      ],
+      "cited": [
+        2,
+        6,
+        9
+      ],
+      "latency_s": 48.04,
+      "tokens": 15041,
+      "judge_tokens": 718,
+      "task_id": "5b2e3f62-bc76-426e-9f3b-d80191299c79",
+      "retried": true,
+      "refused_by_checker": false,
+      "unsupported_first": [
+        "The command-line flag that controls how pytest imports test modules and conftest files is not mentioned in the provided passages.",
+        "does not answer the question: The answer fails to provide the command-line flag that controls import mode, which is required to fully answer the question."
+      ],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "mu07",
+      "type": "multi_hop",
+      "question": "A Celery task fails on a flaky service in CI. Which argument to self.retry() makes it wait 60 seconds before retrying, and how many retries does a task get by default?",
+      "expected": "countdown=60, e.g. raise self.retry(exc=exc, countdown=60); the default max_retries is 3.",
+      "answer": "Use the `countdown` argument on the retry call to delay the retry by 60 seconds:\n\n```python\nraise self.retry(exc=exc, countdown=60)\n```\n[3]\n\nBy default a task is allowed three retries before it is considered failed:\n\n`Task.max_retries` defaults to `3`. [4]",
+      "verdict": "correct",
+      "judge_reason": "Provides both countdown=60 and default max_retries=3 matching the reference.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "089b8bd8-208c-5f09-ac84-d5557242916d",
+          "doc": "celery_docs/docs/userguide/configuration.rst",
+          "section": "Configuration Directives > Task execution settings > `task_retry_on_worker_lost`",
+          "score": 0.831
+        },
+        {
+          "chunk_id": "d80481ff-1977-59cd-b0e4-75b3a03c46b9",
+          "doc": "celery_docs/docs/userguide/calling.rst",
+          "section": "Message Sending Retry",
+          "score": 0.8208
+        },
+        {
+          "chunk_id": "96b7c796-46ce-52ff-89c1-e26aec5fa9f8",
+          "doc": "celery_docs/docs/userguide/tasks.rst",
+          "section": "Retrying > Using a custom retry delay",
+          "score": 0.8091
+        },
+        {
+          "chunk_id": "80d77c9d-c5ae-58e6-a0f3-7e47ff333b9e",
+          "doc": "celery_docs/docs/userguide/tasks.rst",
+          "section": "Retrying > Automatic retry for known exceptions",
+          "score": 0.8046
+        },
+        {
+          "chunk_id": "4c7edd29-01df-5ee4-89f2-8fbf15e26ab5",
+          "doc": "celery_docs/docs/userguide/tasks.rst",
+          "section": "Retrying > Automatic retry for known exceptions",
+          "score": 0.7947
+        }
+      ],
+      "expected_docs": [
+        "celery_docs/docs/userguide/tasks.rst",
+        "celery_docs/docs/userguide/tasks.rst"
+      ],
+      "cited": [
+        3,
+        4
+      ],
+      "latency_s": 9.12,
+      "tokens": 5155,
+      "judge_tokens": 492,
+      "task_id": "b0969c3f-f26d-4b87-bb60-c55d2aaf823a",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": false,
+      "sub_questions": []
+    },
+    {
+      "id": "mu08",
+      "type": "multi_hop",
+      "question": "Your FastAPI tests fail with an import error for httpx in CI. What must be installed, and which GitHub Actions debug variable gives more detailed step logs to confirm it?",
+      "expected": "Install httpx (needed by TestClient); set ACTIONS_STEP_DEBUG to true.",
+      "answer": "To fix the import error you need to add **httpx** to your CI environment (e.g., `uv add httpx` or `pip install httpx`) so that the `TestClient` can be imported and used in your tests [8].  \n\nTo see more detailed logs that confirm the installation step, enable the GitHub Actions debug variable `ACTIONS_STEP_DEBUG` (set it to `true`) [7].",
+      "verdict": "correct",
+      "judge_reason": "Provides both required facts: install httpx and set ACTIONS_STEP_DEBUG=true.",
+      "hit": true,
+      "coverage": 1.0,
+      "retrieved": [
+        {
+          "chunk_id": "be934e65-06b7-51c8-8d45-190be271c529",
+          "doc": "fastapi_docs/docs/en/docs/tutorial/testing.md",
+          "section": "Testing",
+          "score": 0.771
+        },
+        {
+          "chunk_id": "01e67ff8-2ef4-5224-8988-f3b5f5c0889e",
+          "doc": "fastapi_docs/docs/en/docs/tutorial/first-steps.md",
+          "section": "First Steps",
+          "score": 0.7638
+        },
+        {
+          "chunk_id": "d8bd812a-559e-57ac-b070-0552652f58f8",
+          "doc": "fastapi_docs/docs/en/docs/tutorial/dependencies/index.md",
+          "section": "Dependencies > **FastAPI** plug-ins",
+          "score": 0.7458
+        },
+        {
+          "chunk_id": "99470896-1bcd-5310-88ee-0aeb6bf8cbc9",
+          "doc": "fastapi_docs/docs/en/docs/tutorial/first-steps.md",
+          "section": "First Steps > Recap",
+          "score": 0.7425
+        },
+        {
+          "chunk_id": "f1ec31a0-5851-522b-b24b-8a1c1fef5634",
+          "doc": "fastapi_docs/docs/en/docs/index.md",
+          "section": "FastAPI > Dependencies > `standard` Dependencies",
+          "score": 0.7416
+        },
+        {
+          "chunk_id": "2040023b-4159-5a5f-b04d-5df6f9af3aaa",
+          "doc": "fastapi_docs/docs/en/docs/reference/testclient.md",
+          "section": "Test Client - `TestClient`",
+          "score": 0.7483
+        },
+        {
+          "chunk_id": "dc504bad-ecb9-5f53-9f0b-e569afebad1c",
+          "doc": "github_actions_docs/content/actions/how-tos/monitor-workflows/enable-debug-logging.md",
+          "section": "Enabling runner diagnostic logging > Enabling step debug logging",
+          "score": 0.8031
+        },
+        {
+          "chunk_id": "c4984f17-5256-545f-b3c3-afd13322805e",
+          "doc": "fastapi_docs/docs/en/docs/tutorial/testing.md",
+          "section": "Testing > Using `TestClient`",
+          "score": 0.7482
+        }
+      ],
+      "expected_docs": [
+        "fastapi_docs/docs/en/docs/tutorial/testing.md",
+        "github_actions_docs/content/actions/how-tos/monitor-workflows/enable-debug-logging.md"
+      ],
+      "cited": [
+        8,
+        7
+      ],
+      "latency_s": 6.96,
+      "tokens": 5460,
+      "judge_tokens": 518,
+      "task_id": "626522ee-6b79-4fb3-a309-b616a41d40a7",
+      "retried": false,
+      "refused_by_checker": false,
+      "unsupported_first": [],
+      "decomposed": true,
+      "sub_questions": [
+        "How to install httpx in CI for FastAPI tests?",
+        "Which GitHub Actions debug variable gives more detailed step logs?"
+      ]
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,19 @@
+# Answer rubric. Each item passes or fails on its own and is printed separately.
+#   type llm         a judge model answers yes/no for this item
+#   type regex_none  fails if the pattern matches any proposed command (deterministic)
+#   type regex_any   passes if the pattern matches the answer text (deterministic)
+scenario: pushed_bad_commit
+items:
+- id: explains_cause
+  type: llm
+  text: Says the commit is already on the shared remote, so history must not be rewritten.
+- id: revert
+  type: llm
+  text: Uses git revert (a new undo commit) and pushes it.
+- id: warns_rewrite
+  type: llm
+  text: Warns against reset + force-push on a shared branch.
+- id: no_force_push
+  type: regex_none
+  pattern: push\s+.*(--force\b|-f\b|--force-with-lease)
+  text: No proposed command force-pushes.

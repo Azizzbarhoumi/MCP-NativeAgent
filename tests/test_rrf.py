@@ -32,3 +32,18 @@ def test_keeps_k_and_scores_are_rrf_sums():
 def test_no_duplicates():
     merged = rrf_merge([[h("a"), h("b")], [h("b"), h("a")]], k=5)
     assert len(merged) == len({x.chunk_id for x in merged}) == 2
+
+
+def test_cap_per_doc_keeps_order_and_limits_one_document():
+    from knowledge.retrieve import Hit, cap_per_doc
+    def h(i, path):
+        return Hit(chunk_id=str(i), score=1.0 / (i + 1), text="t", source="s", path=path, section="", url=None)
+    hits = [h(0, "manual"), h(1, "manual"), h(2, "manual"), h(3, "stash"), h(4, "manual"), h(5, "reflog")]
+    out = cap_per_doc(hits, 2, 4)
+    assert [x.chunk_id for x in out] == ["0", "1", "3", "5"]
+
+
+def test_dev_docs_has_no_cap_so_its_benchmark_is_unchanged():
+    from knowledge.config import load_config
+    cfg = load_config()
+    assert "dev_docs" not in cfg.retrieval.max_per_doc

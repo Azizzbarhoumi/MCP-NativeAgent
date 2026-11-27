@@ -23,6 +23,9 @@ class Chunking(BaseModel):
 
 class Retrieval(BaseModel):
     k: int = 5
+    # At most this many of the top k chunks from one document, per collection. A collection
+    # with one huge page (git's user-manual.adoc) otherwise fills all k slots with it.
+    max_per_doc: dict[str, int] = {}
 
 
 class KnowledgeConfig(BaseModel):

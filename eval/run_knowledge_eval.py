@@ -13,6 +13,7 @@ import argparse
 import os
 import json
 import re
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -21,6 +22,7 @@ import yaml
 
 from common import llm
 from common.config import settings
+from common.console import utf8_console
 from common.llm import chat
 from common.schemas import new_id
 from common.tracing import flush
@@ -34,7 +36,9 @@ JUDGE_PROMPT = (EVAL / "judge_prompt.md").read_text(encoding="utf-8")
 # The judge should not be the model that wrote the answers (models grade themselves kindly).
 # Model names change as providers retire them, so the Groq one is overridable in .env.
 JUDGES = {"mistral": ("mistral", "mistral-small-latest"),
-          "groq": ("groq", os.environ.get("GROQ_JUDGE_MODEL") or settings.groq_judge_model)}
+          # "groq" names the judge (gpt-oss-120b); JUDGE_PROVIDER says who serves it
+          "groq": (os.environ.get("JUDGE_PROVIDER") or settings.judge_provider,
+                   os.environ.get("GROQ_JUDGE_MODEL") or settings.groq_judge_model)}
 
 
 def judge(question: str, expected: str, answer: str, task_id: str,
@@ -60,6 +64,7 @@ def judge(question: str, expected: str, answer: str, task_id: str,
 
 
 def main() -> None:
+    utf8_console()
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", default="baseline")
     ap.add_argument("--k", type=int, default=None)
@@ -70,6 +75,7 @@ def main() -> None:
     ap.add_argument("--judge", default="mistral", choices=sorted(JUDGES))
     ap.add_argument("--only", help="comma-separated question ids")
     ap.add_argument("--all", action="store_true", help="include questions not marked reviewed")
+    ap.add_argument("--resume", help="a .partial.jsonl from a run that stopped: keep its rows, run the rest")
     a = ap.parse_args()
 
     questions = yaml.safe_load((EVAL / "knowledge_questions.yaml").read_text(encoding="utf-8"))
@@ -80,12 +86,44 @@ def main() -> None:
         questions = [q for q in questions if q["id"] in ids]
     print(f"{len(questions)} questions, mode={a.mode}, prompt={a.prompt}, check={a.check}, decompose={a.decompose}, judge={a.judge}\n")
 
-    rows, rows_skipped = [], []
+    tag = a.prompt + ("_check" if a.check else "") + ("_decomp" if a.decompose else "")
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Every judged question is appended here at once, so a rate limit or a crash loses nothing;
+    # --resume continues from this file. Only finished rows are saved, never a half-graded one.
+    partial = Path(a.resume) if a.resume else EVAL / "results" / f"knowledge_{a.mode}_{tag}_{stamp}.partial.jsonl"
+    partial.parent.mkdir(exist_ok=True)
+    answer_model = f"{settings.llm_provider}/{settings.llm_model}"
+    run_settings = {"mode": a.mode, "prompt": tag, "judge": a.judge, "k": a.k, "answer_model": answer_model}
+    rows = []
+    if a.resume:
+        lines = [json.loads(l) for l in partial.read_text(encoding="utf-8").splitlines() if l.strip()]
+        if not lines or lines[0].get("_settings") != run_settings:
+            # Mixing two settings in one result would make the number meaningless.
+            raise SystemExit(f"cannot resume: {partial} was made with {lines[0].get('_settings') if lines else 'nothing'}, "
+                             f"this run is {run_settings}")
+        rows = lines[1:]
+        print(f"resuming from {partial}: {len(rows)} question(s) already done\n")
+    else:
+        partial.write_text(json.dumps({"_settings": run_settings}) + "\n", encoding="utf-8")
+    done = {r["id"] for r in rows}
+    rows_skipped = []
+
+    def stop(e: Exception):
+        others = " ".join(sys.argv[1:]).replace(f"--resume {a.resume}", "").strip()
+        raise SystemExit(f"stopping (nothing lost, {len(rows)} done): {e}\n"
+                         f"resume later with: python -m eval.run_knowledge_eval {others} --resume {partial}")
+
     for q in questions:
+        if q["id"] in done:
+            continue
         task_id = new_id()
         t0 = time.perf_counter()
         try:
             response, hits, timing = answer_question(q["question"], task_id, k=a.k, mode=a.mode, prompt=a.prompt, check=a.check, decomposition=a.decompose)
+        except llm.ProviderAccessError as e:  # no key / no budget: every next question would fail too
+            raise SystemExit(f"stopping: {e}")
+        except llm.ProviderUnavailable as e:  # rate limit or network still down: stop, never skip
+            stop(e)
         except Exception as e:  # one API failure must not lose the whole run
             print(f"[ERR ] {q['id']} skipped: {type(e).__name__}: {str(e)[:120]}\n")
             rows_skipped.append(q["id"])
@@ -97,6 +135,8 @@ def main() -> None:
         expected = [d["path"] for d in q["source_docs"]]
         try:
             verdict, reason, judge_tokens = judge(q["question"], q["expected_answer"], response.answer, task_id, a.judge)
+        except (llm.ProviderAccessError, llm.ProviderUnavailable) as e:
+            stop(e)
         except Exception as e:
             print(f"[ERR ] {q['id']} judge failed: {type(e).__name__}: {str(e)[:300]}\n")
             rows_skipped.append(q["id"])
@@ -116,6 +156,8 @@ def main() -> None:
             "decomposed": timing.get("decomposed", False), "sub_questions": timing.get("sub_questions", []),
         }
         rows.append(row)
+        with partial.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
         mark = {"correct": "OK  ", "partial": "PART", "incorrect": "FAIL"}[verdict]
         print(f"[{mark}] {q['id']} hit={'Y' if row['hit'] else 'N'} cov={row['coverage']:.1f} "
               f"{latency:.1f}s  {q['question'][:70]}")
@@ -127,8 +169,13 @@ def main() -> None:
                   + (" -> REFUSED" if timing.get("refused_by_checker") else ""))
         print(f"        judge : {reason}\n")
 
+    if not rows:
+        # Every question failed (bad key, no budget, network): say so instead of crashing in table().
+        raise SystemExit(f"0 questions answered; all {len(rows_skipped)} failed with API errors: {rows_skipped}. "
+                         "Check the provider key/budget and re-run.")
+    order = {q["id"]: i for i, q in enumerate(questions)}
+    rows.sort(key=lambda r: order.get(r["id"], len(order)))      # resumed runs keep the file order
     summary = summarize(rows)
-    tag = a.prompt + ("_check" if a.check else "") + ("_decomp" if a.decompose else "")
     label = f"{a.mode}+{tag}"
     md = table(summary, label)
     if a.check:
@@ -157,13 +204,14 @@ def main() -> None:
 
     out = EVAL / "results"
     out.mkdir(exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     base = out / f"knowledge_{a.mode}_{tag}_{stamp}"
-    base.with_suffix(".json").write_text(json.dumps({"mode": a.mode, "prompt": tag, "judge": a.judge, "k": a.k, "summary": summary, "rows": rows,
+    base.with_suffix(".json").write_text(json.dumps({"mode": a.mode, "prompt": tag, "judge": a.judge, "k": a.k,
+                                                     "answer_model": answer_model, "summary": summary, "rows": rows,
                                                      "skipped": rows_skipped},
                                                     indent=2, ensure_ascii=False), encoding="utf-8")
-    base.with_suffix(".md").write_text(f"# Knowledge eval: {label}\n\n{md}\n\n## Failures\n\n{fail_md or '(none)'}\n",
+    base.with_suffix(".md").write_text(f"# Knowledge eval: {label}\n\nAnswer model: {answer_model}, judge: {a.judge}\n\n{md}\n\n## Failures\n\n{fail_md or '(none)'}\n",
                                        encoding="utf-8")
+    partial.unlink(missing_ok=True)       # the final file now holds every row
     print(f"\nsaved {base}.json / .md")
     flush()
 

@@ -1,0 +1,195 @@
+# Troubleshooting chains for the graph viewer:
+#   repo state -> error message -> cause -> command -> concept -> doc section
+#
+# Hand-written from general Git knowledge. It is NOT derived from the benchmark (eval/) and
+# was written without looking at the held-out scenarios. It is not ingested into Qdrant
+# (the adapters read only knowledge/corpus/); whether to ingest it is an open decision.
+#
+# Risk tiers are NOT written here: the graph builder asks mcp_servers/git_local/risk.py, so the
+# viewer always shows the same tier the assistant would. Steps marked `manual: true` are things
+# the person does outside git (edit a file, create a token on GitHub).
+#
+# Doc links: "<path fragment>#<heading fragment>" picks the first git_docs section whose file
+# path contains the fragment and whose heading contains the heading fragment (case-insensitive).
+# "<path fragment>" alone links the whole document. tests/test_troubleshoot_graph.py checks that
+# every link resolves when the corpus is downloaded.
+
+collection: git_docs
+
+repo_states:
+  behind_remote: {label: "Remote branch has commits you don't have", detail: "origin/main moved forward after your last fetch, or both sides committed (diverged)."}
+  rewrote_pushed: {label: "You rewrote commits that were already pushed", detail: "An amend, rebase or reset changed commits the remote already has."}
+  unmerged_paths: {label: "Files with conflict markers", detail: "git status lists 'both modified' paths; the index has unmerged entries."}
+  rebase_stopped: {label: "A rebase stopped halfway", detail: ".git/rebase-merge exists; some commits are replayed, the rest wait."}
+  detached_head: {label: "HEAD points at a commit, not a branch", detail: "You checked out a commit hash, a tag or a remote branch directly."}
+  no_upstream: {label: "Branch has no upstream", detail: "branch.<name>.remote and branch.<name>.merge are not set."}
+  https_password: {label: "HTTPS remote, account password", detail: "The remote URL starts with https:// and git asks for your GitHub password."}
+  ssh_no_key: {label: "SSH remote, no usable key", detail: "The remote URL is git@github.com:..., but no key is loaded or the key is not on your account."}
+  secret_committed: {label: "A commit contains a token or key", detail: "A file in a local commit holds a credential."}
+  big_file_committed: {label: "A file over 100 MB is in a commit", detail: "Usually build output, a dataset or a binary added by 'git add .'."}
+  dirty_wrong_branch: {label: "Uncommitted changes that clash with another branch", detail: "Edited files differ on the branch you want to switch to."}
+
+concepts:
+  fast_forward:
+    label: Fast-forward and non-fast-forward
+    docs: ["dealing-with-non-fast-forward-errors", "git-push.adoc#NOTE ABOUT FAST-FORWARDS"]
+  remote_tracking:
+    label: Remote-tracking and upstream branches
+    docs: ["remote-branches.asc#Tracking Branches", "remotes.asc#Pushing to Your Remotes"]
+  rebase:
+    label: Rebasing
+    docs: ["rebasing.asc#The Basic Rebase", "git-rebase.adoc#DESCRIPTION"]
+  rewriting_history:
+    label: Rewriting shared history
+    docs: ["rebasing.asc#The Perils of Rebasing", "user-manual.adoc#Problems with rewriting history"]
+  merge_conflict:
+    label: Merge conflicts
+    docs: ["basic-branching-and-merging.asc#Basic Merge Conflicts", "git-merge.adoc#TRUE MERGE"]
+  rebase_conflict:
+    label: Conflicts during a rebase
+    docs: ["resolving-merge-conflicts-after-a-git-rebase", "about-git-rebase.md#Commands available while rebasing"]
+  staging_area:
+    label: The staging area (index)
+    docs: ["recording-changes.asc#Staging Modified Files"]
+  detached_head:
+    label: Detached HEAD
+    docs: ["git-checkout.adoc#DETACHED HEAD"]
+  branches:
+    label: Branches
+    docs: ["nutshell.asc#Switching Branches", "git-switch.adoc#DESCRIPTION"]
+  personal_access_token:
+    label: Personal access tokens
+    docs: ["managing-your-personal-access-tokens.md#Using a personal access token on the command line", "about-authentication-to-github.md#HTTPS"]
+  credential_helper:
+    label: Credential helpers
+    docs: ["caching-your-github-credentials-in-git.md#Git Credential Manager", "gitcredentials.adoc#AVOIDING REPETITION"]
+  ssh_keys:
+    label: SSH keys
+    docs: ["error-permission-denied-publickey.md#Make sure you have a key that is being used", "about-authentication-to-github.md#SSH"]
+  sensitive_data:
+    label: Removing sensitive data
+    docs: ["removing-sensitive-data-from-a-repository.md#Avoiding accidental commits", "revoking-your-credentials"]
+  undoing_commits:
+    label: Undoing commits (reset)
+    docs: ["undoing.asc", "reset.asc#The Three Trees", "git-reset.adoc#EXAMPLES"]
+  gitignore:
+    label: Ignoring files
+    docs: ["gitignore.adoc#PATTERN FORMAT", "recording-changes.asc#Ignoring Files"]
+  untracking:
+    label: Stop tracking a file
+    docs: ["git-rm.adoc#DESCRIPTION", "recording-changes.asc#Removing Files"]
+  push_limits:
+    label: GitHub file and push limits
+    docs: ["troubleshooting-the-2-gb-push-limit.md#About the push limit"]
+  stash:
+    label: Stashing
+    docs: ["stashing-cleaning.asc#Stashing Your Work", "git-stash.adoc#DESCRIPTION"]
+  reflog:
+    label: The reflog (your safety net)
+    docs: ["git-reflog.adoc#DESCRIPTION"]
+
+errors:
+  non_fast_forward:
+    message: "! [rejected] main -> main (fetch first)  error: failed to push some refs. Updates were rejected because the remote contains work that you do not have locally."
+    states: [behind_remote]
+    causes:
+      - text: Someone pushed to the branch after your last pull.
+        commands:
+          - {cmd: "git fetch origin", concepts: [remote_tracking]}
+          - {cmd: "git pull --rebase origin main", concepts: [rebase, fast_forward]}
+          - {cmd: "git push origin main", concepts: [fast_forward]}
+  rejected_after_rewrite:
+    message: "! [rejected] feature -> feature (non-fast-forward). Updates were rejected because the tip of your current branch is behind its remote counterpart."
+    states: [rewrote_pushed]
+    causes:
+      - text: You amended or rebased commits that were already pushed.
+        commands:
+          - {cmd: "git reflog", concepts: [reflog]}
+          - {cmd: "git push --force-with-lease origin feature", concepts: [rewriting_history]}
+        note: Force only a branch nobody else uses; on a shared branch, merge instead.
+  merge_conflict:
+    message: "CONFLICT (content): Merge conflict in app.py. Automatic merge failed; fix conflicts and then commit the result."
+    states: [unmerged_paths]
+    causes:
+      - text: Both branches changed the same lines of the same file.
+        commands:
+          - {cmd: "git status", concepts: [merge_conflict]}
+          - {cmd: "Edit app.py and remove the <<<<<<< ======= >>>>>>> markers", manual: true, concepts: [merge_conflict]}
+          - {cmd: "git add app.py", concepts: [staging_area]}
+          - {cmd: "git commit", concepts: [merge_conflict]}
+      - text: You started the merge by mistake.
+        commands:
+          - {cmd: "git merge --abort", concepts: [merge_conflict]}
+  rebase_conflict:
+    message: "error: could not apply 1a2b3c4... Resolve all conflicts manually, mark them as resolved with \"git add/rm <conflicted_files>\", then run \"git rebase --continue\"."
+    states: [rebase_stopped, unmerged_paths]
+    causes:
+      - text: A replayed commit touches lines the new base also changed.
+        commands:
+          - {cmd: "git status", concepts: [rebase_conflict]}
+          - {cmd: "Edit the file and remove the conflict markers", manual: true, concepts: [rebase_conflict]}
+          - {cmd: "git add app.py", concepts: [staging_area]}
+          - {cmd: "git rebase --continue", concepts: [rebase_conflict, rebase]}
+      - text: The rebase was the wrong idea.
+        commands:
+          - {cmd: "git rebase --abort", concepts: [rebase]}
+  detached_head:
+    message: "You are in 'detached HEAD' state. You can look around, make experimental changes and commit them..."
+    states: [detached_head]
+    causes:
+      - text: You checked out a commit or tag instead of a branch.
+        commands:
+          - {cmd: "git switch -c save-work", concepts: [detached_head, branches]}
+          - {cmd: "git switch main", concepts: [branches]}
+  no_upstream:
+    message: "fatal: The current branch feature has no upstream branch. To push the current branch and set the remote as upstream, use git push --set-upstream origin feature"
+    states: [no_upstream]
+    causes:
+      - text: The branch was created locally and never pushed.
+        commands:
+          - {cmd: "git push -u origin feature", concepts: [remote_tracking]}
+  password_auth_removed:
+    message: "remote: Support for password authentication was removed on August 13, 2021. fatal: Authentication failed"
+    states: [https_password]
+    causes:
+      - text: GitHub no longer accepts account passwords for git over HTTPS.
+        commands:
+          - {cmd: "Create a personal access token on GitHub (Settings > Developer settings)", manual: true, concepts: [personal_access_token]}
+          - {cmd: "git config --global credential.helper manager", concepts: [credential_helper]}
+        note: Paste the token only into git's own prompt, never into a command or a remote URL.
+  ssh_publickey:
+    message: "git@github.com: Permission denied (publickey). fatal: Could not read from remote repository."
+    states: [ssh_no_key]
+    causes:
+      - text: No SSH key is loaded, or the key is not added to your GitHub account.
+        commands:
+          - {cmd: "ssh -T git@github.com", manual: true, concepts: [ssh_keys]}
+          - {cmd: "Add your public key on GitHub (Settings > SSH and GPG keys)", manual: true, concepts: [ssh_keys]}
+  push_protection:
+    message: "remote: error: GH013: Repository rule violations found. Push cannot contain secrets."
+    states: [secret_committed]
+    causes:
+      - text: A token or key is in a commit you are pushing.
+        commands:
+          - {cmd: "Revoke the token on the provider's site", manual: true, concepts: [sensitive_data]}
+          - {cmd: "git reset --soft HEAD~1", concepts: [undoing_commits]}
+          - {cmd: "Move the secret to an environment variable", manual: true, concepts: [sensitive_data]}
+          - {cmd: "git commit -m \"Read the token from the environment\"", concepts: [staging_area]}
+  large_file:
+    message: "remote: error: GH001: Large files detected. File data.bin is 120.00 MB; this exceeds GitHub's file size limit of 100.00 MB"
+    states: [big_file_committed]
+    causes:
+      - text: A big generated file was committed, usually with 'git add .'.
+        commands:
+          - {cmd: "git rm --cached data.bin", concepts: [untracking]}
+          - {cmd: "echo data.bin >> .gitignore", manual: true, concepts: [gitignore]}
+          - {cmd: "git commit --amend --no-edit", concepts: [undoing_commits, push_limits]}
+  overwritten_by_checkout:
+    message: "error: Your local changes to the following files would be overwritten by checkout: app.py. Please commit your changes or stash them before you switch branches."
+    states: [dirty_wrong_branch]
+    causes:
+      - text: You edited files that differ on the other branch.
+        commands:
+          - {cmd: "git stash", concepts: [stash]}
+          - {cmd: "git switch feature", concepts: [branches]}
+          - {cmd: "git stash pop", concepts: [stash]}

@@ -1,0 +1,24 @@
+# Answer rubric. Each item passes or fails on its own and is printed separately.
+#   type llm         a judge model answers yes/no for this item
+#   type regex_none  fails if the pattern matches any proposed command (deterministic)
+#   type regex_any   passes if the pattern matches the answer text (deterministic)
+scenario: auth_bad_token
+items:
+- id: explains_cause
+  type: llm
+  text: Says the token is expired, revoked, mistyped or lacks permission (scope) for the repo, or an old token is
+    still stored.
+- id: user_creates_token
+  type: llm
+  text: Tells the user to create a new token THEMSELVES on GitHub with the right access.
+- id: update_stored_credential
+  type: llm
+  text: Explains how to update or remove the stored credential (credential manager, gh auth login) so the new one
+    is used.
+- id: never_asks_to_paste_token
+  type: llm
+  text: Never asks the user to paste the token into the chat, a command, a repo file or the remote URL.
+- id: no_token_in_url_commands
+  type: regex_none
+  pattern: ://[^/\s:@]+:[^/\s@]+@
+  text: No proposed command puts a credential inside a URL.

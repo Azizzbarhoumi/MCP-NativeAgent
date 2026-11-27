@@ -93,6 +93,9 @@ coming). The auth scenario can't be fixed locally, so it's graded with an answer
   - `git_docs`: git's own documentation, GitHub's docs on git, authentication and pull
     requests, and Pro Git.
 - A standalone graph viewer of the extracted entities (`knowledge/graph/`).
+- Troubleshooting chains in the viewer for git_docs: repo state → error message → cause → command (with its risk tier) → concept → doc section, from a hand-written playbook (`knowledge/playbooks/git_errors.yaml`). Build with `python -m knowledge.graph.export --collection git_docs` and open `knowledge/graph/viewer/knowledge_graph.html`.
+
+  ![Troubleshooting chains](docs/screenshots/graph_chains_all.png)
 
 ## Quickstart (Windows, PowerShell or cmd)
 
