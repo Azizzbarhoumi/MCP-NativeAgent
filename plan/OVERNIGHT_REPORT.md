@@ -2,6 +2,25 @@
 
 Branch: `overnight/2026-11-26` (never main). Every commit is authored by Aziz only, with no AI lines.
 
+## Status on 27 November, 08:45 Tunis (runs 3 and 4; read this first)
+
+**Two branches:**
+- `overnight/2026-11-26` is frozen. Your PC runs the benchmark on it, so every run measures the
+  same system.
+- `step/web-ui` holds everything newer: the web UI, the single risk table, and the analysis
+  tools. Nothing has been merged into `main`.
+
+**Tests on `step/web-ui`:** 352 passed, 11 skipped (the 11 need your PC's Qdrant).
+
+| task | state |
+|---|---|
+| A vs B (decomposition) | **B is at 25 of 31.** Groq's gpt-oss-20b daily budget runs out every few questions. The PC resumes by itself every 30 min. On the 25 shared questions it's **23 vs 23 correct: within noise.** B fixed ex11 and mu02 but lost lo07 and ex06, and lo07 looks like judge noise. The 6 questions left are all multi_hop, where decomposition should help most. |
+| Real e2e run (25 scenarios) | Queued behind B on the PC. The replay tool for labelling failures is ready (part 4). |
+| Beginner score | Comes from that e2e run. The averaging script now reports it per item (part 5). |
+| Averaged benchmark (2 to 3 runs) | Queued: A2, B2, then e2e run 2, then run 3. On the free tier each job uses about one day of gpt-oss-20b budget, so the full queue takes about a week. A paid Groq tier would take hours. |
+| Web UI | Done (parts 1 and 2), and run with a real model on your PC (part 6). 2 of 3 scenarios fixed, and every safety check passed. One finding: our safety review steers the model from `reset --hard` to `revert` on an unpushed wrong-branch commit. |
+| Approval button | Designed and built, **off by default** until you review `docs/approval_page.md`. |
+
 ## Run 2 summary (interim, 12:20 Tunis; the final numbers are added when the runs finish)
 
 **Tests:** **272 passed, 11 skipped** here. The 11 are the live tests that need your PC; on
