@@ -16,3 +16,4 @@ logs/
 # graph provenance store, LLM cache and exports (full chunk text and excerpts of third-party docs)
 knowledge/graph/data/
 eval/graph_edge_review.md
+.deps/
